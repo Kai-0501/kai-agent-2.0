@@ -1,7 +1,7 @@
 # Spec: Sign in with ChatGPT (subscription credential route)
 
 - Package: `packages/runtime` (`auth/chatgpt/`), types in `packages/core/src/credentials.ts`
-- Decision: [ADR-0017](../adr/0017-sign-in-with-chatgpt-route.md)
+- Decision: [ADR-0019](../adr/0019-sign-in-with-chatgpt-route.md)
 - Research: [extension research §2](../research/extension-2026-10.md#2-sign-in-with-chatgpt-for-open-source-and-local-apps-r2r10) (open questions O1–O9)
 - Collaborators: [credentials](credentials.md), [OpenAI Responses provider](openai-responses-provider.md), [macOS client](macos-client.md), [protocol](protocol.md)
 

@@ -9,7 +9,7 @@ getting worse.**
 > architecture, decision records, subsystem specifications, a failure-mode analysis, an
 > evaluation plan and a **types-only scaffold**. The implementation is planned in
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). The R1 release scope (below) was added by
-> [ADR-0015](docs/adr/0015-release-scope-macos-multi-provider.md).
+> [ADR-0017](docs/adr/0019-release-scope-macos-multi-provider.md).
 
 ## Why
 
@@ -95,12 +95,12 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) for the full design and runtime flow.
 
 - **TypeScript on Node.js 24**; first-party SDKs where they exist. [ADR-0001](docs/adr/0001-implementation-language-runtime.md)
 - **Append-only SQLite event log. Model context is a projection.** [ADR-0004](docs/adr/0004-durable-event-session-model.md)
-- **Epochs: budgeted seeds plus ingress control**, with a preflight on every request. [ADR-0005](docs/adr/0005-context-compiler-and-epochs.md), [ADR-0023](docs/adr/0023-audit-corrections.md)
-- **Adapters, credential routes, harness profiles and capability snapshots are separate**; core branches on capabilities only. [ADR-0016](docs/adr/0016-providers-routes-profiles-capabilities.md)
-- **Sign in with ChatGPT through the documented open-source flow only**; no borrowed client IDs or private routes. [ADR-0017](docs/adr/0017-sign-in-with-chatgpt-route.md)
-- **Learning is per finalized project, deterministic in evidence and retrieval, and outcome-gated.** [ADR-0020](docs/adr/0020-shared-procedural-learning.md)
-- **Research drives the installed Chrome** through `playwright-core`, an app-owned profile and a filtering proxy. [ADR-0021](docs/adr/0021-chrome-research.md)
-- **Electron shell, runtime in a separate process, KSP over `MessagePort`.** [ADR-0022](docs/adr/0022-macos-desktop-shell.md)
+- **Epochs: budgeted seeds plus ingress control**, with a preflight on every request. [ADR-0005](docs/adr/0005-context-compiler-and-epochs.md), [ADR-0016](docs/adr/0018-robustness-amendments.md)
+- **Adapters, credential routes, harness profiles and capability snapshots are separate**; core branches on capabilities only. [ADR-0018](docs/adr/0020-providers-routes-profiles-capabilities.md)
+- **Sign in with ChatGPT through the documented open-source flow only**; no borrowed client IDs or private routes. [ADR-0019](docs/adr/0021-sign-in-with-chatgpt-route.md)
+- **Learning is per finalized project, deterministic in evidence and retrieval, and outcome-gated.** [ADR-0022](docs/adr/0024-shared-procedural-learning.md)
+- **Research drives the installed Chrome** through `playwright-core`, an app-owned profile and a filtering proxy. [ADR-0023](docs/adr/0016-chrome-research.md)
+- **Electron shell, runtime in a separate process, KSP over `MessagePort`.** [ADR-0024](docs/adr/0024-macos-desktop-shell.md)
 - **Every mechanism must win in the benchmark** to stay on by default. [ADR-0014](docs/adr/0014-measurement-gated-mechanisms.md)
 
 ## Non-goals (R1)
@@ -116,4 +116,4 @@ To be decided by the repository owner. Upstream projects studied here are used a
 inspiration only ([licensing summary](docs/research/README.md#licensing-summary)). The ChatGPT
 subscription route is documented for open-source projects, personal projects that run locally,
 and approved apps; Kai currently assumes **personal local use** only and does not change its
-licence or distribution on the owner's behalf ([ADR-0017](docs/adr/0017-sign-in-with-chatgpt-route.md)).
+licence or distribution on the owner's behalf ([ADR-0019](docs/adr/0021-sign-in-with-chatgpt-route.md)).

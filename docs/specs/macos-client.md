@@ -1,7 +1,7 @@
 # Spec: macOS client and runtime hosting
 
 - Packages: `apps/macos` (Electron main, preload, renderer; planned), `packages/runtime` (hosted in a `utilityProcess`), `packages/protocol`
-- Decision: [ADR-0022](../adr/0022-macos-desktop-shell.md), [ADR-0002](../adr/0002-runtime-client-boundary.md)
+- Decision: [ADR-0024](../adr/0024-macos-desktop-shell.md), [ADR-0002](../adr/0002-runtime-client-boundary.md)
 - Collaborators: [protocol](protocol.md), [credentials](credentials.md), [Sign in with ChatGPT](chatgpt-sign-in.md), [compatible endpoints](compatible-endpoints.md), [Chrome research](chrome-research.md), [learning](learning-service.md), [telemetry](telemetry.md), [configuration](configuration.md)
 
 ## Responsibility

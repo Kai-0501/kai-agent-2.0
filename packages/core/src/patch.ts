@@ -59,7 +59,7 @@ export type RejectReason =
   | "external_change"
   | "noop"
   | "invalid_path"
-  | "instructions_pending"; // unseen nested instructions: withheld once, model reconsiders (docs/adr/0023)
+  | "instructions_pending"; // unseen nested instructions: withheld once, model reconsiders (docs/adr/0016)
 
 /** Durable intent committed (TransactionPrepared) before the first rename (docs/specs/patch-engine.md#commit-protocol). */
 export interface PreparedManifest {

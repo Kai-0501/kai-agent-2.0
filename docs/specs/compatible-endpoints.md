@@ -1,7 +1,7 @@
 # Spec: OpenAI-compatible endpoints
 
 - Package: `packages/provider-compatible`
-- Decision: [ADR-0019](../adr/0019-openai-compatible-endpoints.md)
+- Decision: [ADR-0021](../adr/0021-openai-compatible-endpoints.md)
 - Collaborators: [credentials](credentials.md), [harness profiles](harness-profiles.md) (`generic`), [Context Compiler](context-compiler.md), [configuration](configuration.md), [telemetry](telemetry.md)
 
 ## Responsibility

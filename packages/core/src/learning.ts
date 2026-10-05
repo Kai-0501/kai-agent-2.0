@@ -3,7 +3,7 @@
  *
  * Learning Service port and records: project finalization, deterministic evidence packets,
  * bounded retrospectives, scoped versioned skills, deterministic retrieval with pinned snapshots.
- * Spec: docs/specs/learning-service.md · Decision: docs/adr/0020.
+ * Spec: docs/specs/learning-service.md · Decision: docs/adr/0022.
  *
  * Learning is advisory: it never changes permissions, verification requirements, integrity
  * policy, user objectives or runtime code (policy linter P1–P9).

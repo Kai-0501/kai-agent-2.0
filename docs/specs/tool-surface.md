@@ -1,7 +1,7 @@
 # Spec: Tool surface, result formats and system prompt contract
 
 - Package: `packages/core` (`tools/`)
-- Decision: [ADR-0012](../adr/0012-tool-surface-and-dynamic-exposure.md), [ADR-0007](../adr/0007-editing-protocol.md); amended by [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md) (profile rendering), [ADR-0021](../adr/0021-chrome-research.md) (research pack), [ADR-0023](../adr/0023-audit-corrections.md) (`update_plan` authority, instructions before mutation)
+- Decision: [ADR-0012](../adr/0012-tool-surface-and-dynamic-exposure.md), [ADR-0007](../adr/0007-editing-protocol.md); amended by [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md) (profile rendering), [ADR-0023](../adr/0023-chrome-research.md) (research pack), [ADR-0016](../adr/0016-robustness-amendments.md) (`update_plan` authority, instructions before mutation)
 
 ## Responsibility
 
@@ -160,7 +160,7 @@ Updates the task's **working state**, which is durable and becomes part of every
 Returns `ok` and the current plan in a compact form. `scope` and `new_symbols` feed the firewall
 (scope checks, promissory symbols). `phase` feeds the Governor.
 
-**The objective and the acceptance criteria are user-owned** ([ADR-0023](../adr/0023-audit-corrections.md)).
+**The objective and the acceptance criteria are user-owned** ([ADR-0016](../adr/0016-robustness-amendments.md)).
 `update_plan` has no field to set or change them; the user changes them with `task.amend`.
 `derived_criteria` are recorded as `DerivedCriteriaRecorded`, shown as model-proposed, and can
 only add checks. Notes with `sources` are citation-validated

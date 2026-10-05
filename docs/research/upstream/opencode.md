@@ -113,6 +113,6 @@ a ChatGPT Plus/Pro login. That login reuses the Codex CLI's OAuth client ID and 
 `chatgpt.com/backend-api/codex/responses`
 ([`plugin/openai/codex.ts` L10–L13](https://github.com/anomalyco/opencode/blob/907b3bc518fa48e90e8ec24dd327d13eee71c36c/packages/opencode/src/plugin/openai/codex.ts#L10-L13)).
 Kai does not copy that route; it uses the documented open-source Sign in with ChatGPT flow
-([ADR-0017](../../adr/0017-sign-in-with-chatgpt-route.md)). Custom endpoints and skills are
+([ADR-0019](../../adr/0019-sign-in-with-chatgpt-route.md)). Custom endpoints and skills are
 table stakes; Kai's differentiation claims are listed, as falsifiable and not yet demonstrated,
 in [harness-profiles](../../specs/harness-profiles.md#comparison-with-opencode).

@@ -1,7 +1,7 @@
 # Spec: Event model and Session Store
 
 - Package: `packages/core` (`store/`, `events/`)
-- Decision: [ADR-0004](../adr/0004-durable-event-session-model.md); amended by [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md), [ADR-0020](../adr/0020-shared-procedural-learning.md), [ADR-0021](../adr/0021-chrome-research.md), [ADR-0023](../adr/0023-audit-corrections.md)
+- Decision: [ADR-0004](../adr/0004-durable-event-session-model.md); amended by [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md), [ADR-0022](../adr/0022-shared-procedural-learning.md), [ADR-0023](../adr/0023-chrome-research.md), [ADR-0016](../adr/0016-robustness-amendments.md)
 
 ## Responsibility
 
@@ -125,7 +125,7 @@ additional optional fields).
 - `SessionEnded {reason}`
 - `UserMessage {taskId?, text, attachments?}` / `SteeringMessage {taskId, text}`
 - `TaskCreated {taskId, projectId, objective, acceptance[], scopeHints[], owner: "user"}`
-- `TaskAmended {taskId, objective?, acceptance?, by: "user"}` (the only way user criteria change; [ADR-0023](../adr/0023-audit-corrections.md))
+- `TaskAmended {taskId, objective?, acceptance?, by: "user"}` (the only way user criteria change; [ADR-0016](../adr/0016-robustness-amendments.md))
 - `DerivedCriteriaRecorded {taskId, criteria[]}` (model-proposed via `update_plan`; additive only)
 - `TaskStateChanged {taskId, from, to, reason, evidenceRef?}`
 

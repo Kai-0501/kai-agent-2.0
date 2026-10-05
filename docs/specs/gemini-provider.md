@@ -1,7 +1,7 @@
 # Spec: Gemini Provider
 
 - Package: `packages/provider-gemini`
-- Decisions: [ADR-0003](../adr/0003-gemini-provider-strategy.md), [ADR-0011](../adr/0011-provider-extensibility-boundary.md), [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md) (route `gemini.api_key`, `gemini` profile, capability snapshot)
+- Decisions: [ADR-0003](../adr/0003-gemini-provider-strategy.md), [ADR-0011](../adr/0011-provider-extensibility-boundary.md), [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md) (route `gemini.api_key`, `gemini` profile, capability snapshot)
 - Research: [gemini-api.md](../research/gemini-api.md)
 
 ## Responsibility
@@ -21,7 +21,7 @@ model-facing behaviour (founding prompt, Gemini-CLI-shaped tools, governor table
 reported; `reasoningIncludedInOutput: false` because thought tokens are separate). Gemini
 built-in tools (`google_search`, `url_context`, `code_execution`) are **not** used for research,
 which goes through the shared [Chrome research service](chrome-research.md) for every profile
-([ADR-0021](../adr/0021-chrome-research.md)).
+([ADR-0023](../adr/0023-chrome-research.md)).
 
 ## Interfaces
 

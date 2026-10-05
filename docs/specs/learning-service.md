@@ -1,7 +1,7 @@
 # Spec: Learning Service (shared procedural learning)
 
 - Package: `packages/core` (`learning/`: ports, evidence packet, linter, retrieval), `packages/runtime` (stores, outbox worker, Markdown projection)
-- Decision: [ADR-0020](../adr/0020-shared-procedural-learning.md)
+- Decision: [ADR-0022](../adr/0022-shared-procedural-learning.md)
 - Research: [Hermes skills, memory, curator](../research/extension-2026-10.md#5-hermes-procedural-learning-r17r18)
 - Collaborators: [event model](event-model.md), [Context Compiler](context-compiler.md), [telemetry](telemetry.md), [Verification Engine](verification-engine.md), [credentials](credentials.md), [harness profiles](harness-profiles.md), [Chrome research](chrome-research.md)
 

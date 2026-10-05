@@ -3,7 +3,7 @@
  *
  * Kai Session Protocol (KSP): the only contract between the Kai Runtime (which owns the
  * workspace, credentials and the research browser) and clients (macOS app, CLI, benchmark).
- * Spec: docs/specs/protocol.md · Decisions: docs/adr/0002, docs/adr/0022.
+ * Spec: docs/specs/protocol.md · Decisions: docs/adr/0002, docs/adr/0024.
  *
  * Credential-free rule: no response, notification or event type in this file carries secret
  * material. The only secret-bearing field is the inbound `credentials.put` params.secret.
@@ -76,7 +76,7 @@ export type FinalTaskState = Extract<
 
 /**
  * Canonical effort scale (ordinal). Not a universal provider enum: profiles map an intent to
- * each model's native levels from its capability snapshot (docs/adr/0016).
+ * each model's native levels from its capability snapshot (docs/adr/0018).
  */
 export type EffortLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 /** Founding name kept as an alias. */
@@ -269,7 +269,7 @@ export interface KspMethods {
   "stats.get": { params: { scope: "turn" | "task" | "session" | "workspace" | "project"; id: string }; result: Record<string, unknown> };
 
   // --- Release extension (docs/specs/protocol.md#methods-v1) ---
-  /** User-only change of the user-owned objective or acceptance criteria (docs/adr/0023). */
+  /** User-only change of the user-owned objective or acceptance criteria (docs/adr/0016). */
   "task.amend": { params: { taskId: TaskId; objective?: string; acceptance?: string[] }; result: Record<string, never> };
   "task.resume": { params: { taskId: TaskId; routeId?: RouteId; model?: string }; result: Record<string, never> };
   "task.switchRoute": {

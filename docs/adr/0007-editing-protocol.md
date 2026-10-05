@@ -3,7 +3,6 @@
 - Status: Proposed
 - Date: 2026-10-05
 - Related: [specs/patch-engine.md](../specs/patch-engine.md), [specs/hallucination-firewall.md](../specs/hallucination-firewall.md), [specs/tool-surface.md](../specs/tool-surface.md), [research/upstream/gemini-cli.md](../research/upstream/gemini-cli.md), [research/upstream/swe-agent.md](../research/upstream/swe-agent.md), [research/upstream/codex-and-serena.md](../research/upstream/codex-and-serena.md)
-- Partially superseded by: [ADR-0023](0023-audit-corrections.md) (durable prepared manifest and restart recovery for multi-file commits)
 
 ## Context / problem
 

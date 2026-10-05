@@ -4,7 +4,7 @@
  * Selective, fresh-context critic (after deterministic verification passes, on risk triggers and
  * open review obligations). Blocking findings need a violated requirement or a concrete defect;
  * review obligations are discharged only by a validated review or the user.
- * Spec: docs/specs/critic.md · Decisions: docs/adr/0018, docs/adr/0023.
+ * Spec: docs/specs/critic.md · Decisions: docs/adr/0020, docs/adr/0016.
  */
 import type { TaskId } from "@kai/protocol";
 import type { SymbolCard } from "./codeintel.js";

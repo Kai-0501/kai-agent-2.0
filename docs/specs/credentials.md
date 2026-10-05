@@ -1,7 +1,7 @@
 # Spec: Credentials, credential routes and usage classes
 
 - Package: `packages/core` (`credentials.ts`: ports and types), `packages/runtime` (stores, route state machines)
-- Decisions: [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md), [ADR-0017](../adr/0017-sign-in-with-chatgpt-route.md)
+- Decisions: [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md), [ADR-0019](../adr/0019-sign-in-with-chatgpt-route.md)
 - Collaborators: [Sign in with ChatGPT](chatgpt-sign-in.md), [OpenAI Responses provider](openai-responses-provider.md), [compatible endpoints](compatible-endpoints.md), [Gemini provider](gemini-provider.md), [configuration](configuration.md), [protocol](protocol.md)
 
 ## Responsibility
@@ -83,7 +83,7 @@ interface RequestAuth { headers: Readonly<Record<string, string>>; origin: strin
 - `RequestAuth.origin` binds the credential to one origin; adapters refuse to attach it to any
   other origin, including after redirects.
 - `accountScope` (an opaque hash of the account key) tags provider-native replay items so they
-  never cross accounts ([ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md)).
+  never cross accounts ([ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md)).
 
 ## macOS Keychain store
 

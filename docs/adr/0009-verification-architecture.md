@@ -3,7 +3,6 @@
 - Status: Proposed
 - Date: 2026-10-05
 - Related: [specs/verification-engine.md](../specs/verification-engine.md), [specs/test-integrity-guard.md](../specs/test-integrity-guard.md), [specs/critic.md](../specs/critic.md), [specs/repair-replan-controller.md](../specs/repair-replan-controller.md)
-- Partially superseded by: [ADR-0023](0023-audit-corrections.md) (flaky classification needs baseline evidence; review obligations; user-owned acceptance criteria)
 
 ## Context / problem
 

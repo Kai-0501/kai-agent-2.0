@@ -6,7 +6,7 @@
  * context (Playwright adds --user-data-dir and --remote-debugging-pipe; no TCP debugging port),
  * routes all traffic through a loopback filtering proxy, parses Google SERPs semantically and
  * extracts readable page text. Implements the core BrowserPort; core never imports this package.
- * Spec: docs/specs/chrome-research.md · Decision: docs/adr/0021 · Research: docs/research/extension-2026-10.md §4
+ * Spec: docs/specs/chrome-research.md · Decision: docs/adr/0023 · Research: docs/research/extension-2026-10.md §4
  */
 import type { BrowserPort, ResearchOutcome, ResultKind } from "@kai/core";
 import type { ChromeStatus, LineRange, ResearchOpId } from "@kai/protocol";

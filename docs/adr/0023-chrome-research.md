@@ -1,4 +1,4 @@
-# ADR-0021: Provider-independent research through the installed Google Chrome
+# ADR-0023: Provider-independent research through the installed Google Chrome
 
 - Status: Proposed
 - Date: 2026-10-05

@@ -15,7 +15,7 @@ something a user or the benchmark can run end-to-end.
 
 All six release features (macOS app, Sign in with ChatGPT, the `openai` profile, compatible
 endpoints, the `generic` profile, Chrome research) and shared learning are in the **R1 release**
-([ADR-0015](docs/adr/0015-release-scope-macos-multi-provider.md)). Phases sequence them; none
+([ADR-0017](docs/adr/0019-release-scope-macos-multi-provider.md)). Phases sequence them; none
 is deferred to an open-ended "later". Their *default-on* settings follow the benchmark
 ([ADR-0014](docs/adr/0014-measurement-gated-mechanisms.md)), and the [release gates](#r1-release-gates)
 say what must be shown before release.
@@ -52,7 +52,7 @@ work. These are relative sizes for planning order, not commitments.
 - Logging: structured JSON logs to a file in the data dir, never to stdout in protocol mode.
 - A **fake provider** (scripted turns) for tests ([ADR-0011](docs/adr/0011-provider-extensibility-boundary.md)),
   with configurable **capability snapshots**: no effort control, unknown usage fields, small
-  context windows, no continuation ([ADR-0016](docs/adr/0016-providers-routes-profiles-capabilities.md)).
+  context windows, no continuation ([ADR-0018](docs/adr/0020-providers-routes-profiles-capabilities.md)).
   Loop and controller tests use these from day one, so the generic cases are not retrofitted.
 - **Config schema v2** with `KAI_HOME`, layered loading with restrict-only workspace keys, and the
   v1 → v2 **migration** ([configuration](docs/specs/configuration.md)).
@@ -409,11 +409,11 @@ surface of Phases 7–10 but its shell and flows 1 and 4 can start after Phase 4
 
 | Item | Why postponed | Revisit when |
 |---|---|---|
-| Daemon + WebSocket transport, remote clients and auth | R1 clients are local (app via `MessagePort`, CLI) ([ADR-0022](docs/adr/0022-macos-desktop-shell.md)) | A remote or multi-user client is planned |
+| Daemon + WebSocket transport, remote clients and auth | R1 clients are local (app via `MessagePort`, CLI) ([ADR-0024](docs/adr/0024-macos-desktop-shell.md)) | A remote or multi-user client is planned |
 | ACP adapter | Nice-to-have integration | After R1, if editors and T3 Code integration are wanted |
 | Web, mobile, Windows and Linux desktop UIs | R1 product surface is macOS | After R1 |
 | OS sandbox (bwrap/Seatbelt) | Large. The policy plus process groups cover R1 | Before untrusted or multi-user use |
-| Model-native hosted tools (Gemini `google_search`, OpenAI `web_search`) as product features | Research is provider-independent through Chrome ([ADR-0021](docs/adr/0021-chrome-research.md)) | Only as benchmark context |
+| Model-native hosted tools (Gemini `google_search`, OpenAI `web_search`) as product features | Research is provider-independent through Chrome ([ADR-0023](docs/adr/0016-chrome-research.md)) | Only as benchmark context |
 | A fresh-context "research digest" call | Unmeasured extra LLM call | If the research evaluation shows main-context savings above its cost |
 | Embeddings / semantic search (code or skills) | Unproven over structural plus lexical search | If retrieval misses show up in benchmark failure analysis |
 | Text-tool fallback for edits on endpoints without tool calling | Reliability bar not met | If an endpoint shows ≥ 95% valid calls over ≥ 200 probes |

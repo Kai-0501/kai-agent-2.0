@@ -1,7 +1,7 @@
 # Spec: Configuration, migration, identifiers and versioning
 
 - Packages: `packages/core` (`config.ts`: schema and defaults), `packages/runtime` (loading, migration, stores)
-- Decisions: [ADR-0015](../adr/0015-release-scope-macos-multi-provider.md), [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md), [ADR-0014](../adr/0014-measurement-gated-mechanisms.md)
+- Decisions: [ADR-0017](../adr/0017-release-scope-macos-multi-provider.md), [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md), [ADR-0014](../adr/0014-measurement-gated-mechanisms.md)
 - Collaborators: [protocol](protocol.md), [event model](event-model.md), [credentials](credentials.md), [learning](learning-service.md), [Chrome research](chrome-research.md)
 
 ## Responsibility

@@ -4,7 +4,7 @@
  * @kai/provider-gemini: native Gemini Interactions API adapter via the first-party @google/genai SDK
  * (to be added as a pinned dependency in Phase 1). No OpenAI-compatible shim. Serves the
  * `gemini.api_key` route; model-facing behaviour is the `gemini` harness profile.
- * Spec: docs/specs/gemini-provider.md · Decisions: docs/adr/0003, docs/adr/0016 · Research: docs/research/gemini-api.md
+ * Spec: docs/specs/gemini-provider.md · Decisions: docs/adr/0003, docs/adr/0018 · Research: docs/research/gemini-api.md
  *
  * Mapping summary (canonical → Interactions):
  *   systemInstruction            → system_instruction
@@ -17,7 +17,7 @@
  *   continuation (provider_chain)→ previous_interaction_id
  *   stateMode "stateless"        → store: false
  * Never set: temperature, top_p (deprecated; keep Gemini 3 default 1.0), cached_content (deprecated).
- * Built-in tools are not used for research (shared Chrome research service, docs/adr/0021).
+ * Built-in tools are not used for research (shared Chrome research service, docs/adr/0023).
  */
 import type { CapabilitySnapshot, ModelProvider } from "@kai/core";
 
@@ -29,7 +29,7 @@ export type GeminiThinkingLevel = "minimal" | "low" | "medium" | "high";
 /** Interactions `ServiceTier` values used by Kai (the API also defines "deferred"). */
 export type GeminiServiceTier = "standard" | "flex" | "priority";
 
-/** Off by default; not a product dependency (research goes through Chrome, docs/adr/0021). */
+/** Off by default; not a product dependency (research goes through Chrome, docs/adr/0023). */
 export type GeminiBuiltInTool = "google_search" | "url_context" | "code_execution";
 
 /** Typed provider-specific options carried in ProviderTurnRequest.providerOptions. */

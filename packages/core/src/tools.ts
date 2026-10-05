@@ -46,7 +46,7 @@ export interface CoreToolArgs {
   read_artifact: { artifact_id: string; query?: string; start_line?: number; end_line?: number };
   /**
    * No objective or acceptance fields: those are user-owned and change only via task.amend
-   * (docs/adr/0023). derived_criteria can only add checks.
+   * (docs/adr/0016). derived_criteria can only add checks.
    */
   update_plan: {
     plan?: { step: string; status: "todo" | "doing" | "done" | "dropped" }[];

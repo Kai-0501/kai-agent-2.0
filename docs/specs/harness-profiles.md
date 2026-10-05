@@ -1,7 +1,7 @@
 # Spec: Harness profiles (`gemini`, `openai`, `generic`)
 
 - Package: `packages/core` (`profiles.ts`: the `HarnessProfile` port), `packages/profiles` (the three implementations; planned)
-- Decisions: [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md), [ADR-0018](../adr/0018-openai-responses-and-profile.md), [ADR-0019](../adr/0019-openai-compatible-endpoints.md)
+- Decisions: [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md), [ADR-0020](../adr/0020-openai-responses-and-profile.md), [ADR-0021](../adr/0021-openai-compatible-endpoints.md)
 - Collaborators: [Context Compiler](context-compiler.md), [tool surface](tool-surface.md), [Reasoning Governor](reasoning-governor.md), [critic](critic.md), [Repair Controller](repair-replan-controller.md), [compatible endpoints](compatible-endpoints.md)
 
 ## Responsibility

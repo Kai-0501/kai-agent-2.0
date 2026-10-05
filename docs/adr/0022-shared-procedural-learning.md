@@ -1,4 +1,4 @@
-# ADR-0020: Shared procedural learning service
+# ADR-0022: Shared procedural learning service
 
 - Status: Proposed
 - Date: 2026-10-05

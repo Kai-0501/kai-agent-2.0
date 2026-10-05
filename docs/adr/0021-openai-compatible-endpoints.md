@@ -1,8 +1,8 @@
-# ADR-0019: OpenAI-compatible endpoints and the `generic` profile
+# ADR-0021: OpenAI-compatible endpoints and the `generic` profile
 
 - Status: Proposed
 - Date: 2026-10-05
-- Related: [specs/compatible-endpoints.md](../specs/compatible-endpoints.md), [specs/harness-profiles.md](../specs/harness-profiles.md), [ADR-0016](0016-providers-routes-profiles-capabilities.md), [research/extension-2026-10.md §6](../research/extension-2026-10.md#6-opencode-baseline-r19r20)
+- Related: [specs/compatible-endpoints.md](../specs/compatible-endpoints.md), [specs/harness-profiles.md](../specs/harness-profiles.md), [ADR-0018](0018-providers-routes-profiles-capabilities.md), [research/extension-2026-10.md §6](../research/extension-2026-10.md#6-opencode-baseline-r19r20)
 
 ## Context / problem
 

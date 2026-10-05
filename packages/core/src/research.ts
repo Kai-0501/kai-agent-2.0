@@ -4,7 +4,7 @@
  * Research service port, tool shapes, source records and typed outcomes. The browser side
  * (Chrome discovery, pipe transport, filtering proxy, SERP parsing, extraction) is implemented by
  * @kai/research-chrome behind BrowserPort; core never imports it.
- * Spec: docs/specs/chrome-research.md · Decision: docs/adr/0021.
+ * Spec: docs/specs/chrome-research.md · Decision: docs/adr/0023.
  */
 import type { ArtifactId, ChromeStatus, ContentHash, LineRange, ResearchOpId, SourceId, TaskId } from "@kai/protocol";
 

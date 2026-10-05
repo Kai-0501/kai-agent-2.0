@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-10-05
 - Related: [ADR-0003](0003-gemini-provider-strategy.md), [specs/gemini-provider.md](../specs/gemini-provider.md), [specs/reasoning-governor.md](../specs/reasoning-governor.md)
-- Partially superseded by: [ADR-0016](0016-providers-routes-profiles-capabilities.md) (effort scale, optional continuation, unknown usage fields, credential routes and harness profiles)
+- Partially superseded by: [ADR-0018](0018-providers-routes-profiles-capabilities.md) (effort scale, optional continuation, unknown usage fields, credential routes and harness profiles)
 
 ## Context / problem
 

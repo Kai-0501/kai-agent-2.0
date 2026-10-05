@@ -3,7 +3,7 @@
  *
  * Credential store port and credential routes. Secrets never leave the runtime: KSP, events,
  * logs, renderer state and model input see only CredentialRef, RouteState and masked labels.
- * Spec: docs/specs/credentials.md, docs/specs/chatgpt-sign-in.md · Decisions: docs/adr/0016, docs/adr/0017.
+ * Spec: docs/specs/credentials.md, docs/specs/chatgpt-sign-in.md · Decisions: docs/adr/0018, docs/adr/0019.
  */
 import type { AccountKey, CredentialRef, RouteId, RouteState, UsageClass } from "@kai/protocol";
 

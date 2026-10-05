@@ -2,7 +2,7 @@
 
 - Package: `packages/core` (`governor/`, `risk/`)
 - Research: [gemini-api.md §6](../research/gemini-api.md#6-thinking-reasoning-effort) (Gemini CLI and OpenCode hard-code HIGH)
-- Amended by: [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md) (canonical effort scale, native mapping, models without control) and [harness profiles](harness-profiles.md#effort-policy) (per-profile modifiers)
+- Amended by: [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md) (canonical effort scale, native mapping, models without control) and [harness profiles](harness-profiles.md#effort-policy) (per-profile modifiers)
 
 ## Responsibility
 

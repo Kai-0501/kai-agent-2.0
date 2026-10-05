@@ -2,7 +2,7 @@
 
 - Package: `packages/core` (`context/`)
 - Decision: [ADR-0005](../adr/0005-context-compiler-and-epochs.md)
-- Amended by: [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md) (profiles, optional continuation, local replay) and [ADR-0023](../adr/0023-audit-corrections.md) (request preflight, complete manifests, instructions before mutation)
+- Amended by: [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md) (profiles, optional continuation, local replay) and [ADR-0016](../adr/0016-robustness-amendments.md) (request preflight, complete manifests, instructions before mutation)
 - Collaborators: [Read Ledger](read-ledger.md), [Artifact Store](artifact-store.md), [Repo Index](repo-index.md), [Gemini Provider](gemini-provider.md), [OpenAI Responses provider](openai-responses-provider.md), [compatible endpoints](compatible-endpoints.md), [harness profiles](harness-profiles.md), [learning](learning-service.md), [Chrome research](chrome-research.md), [Reasoning Governor](reasoning-governor.md), [Telemetry](telemetry.md)
 
 ## Responsibility
@@ -204,7 +204,7 @@ For each `IngressItem`, in order:
    notice is not re-sent. Each is truncated to `noticeMax`.
 3. **JIT project instructions:** when a tool result touches a path under a directory with an
    unseen `AGENTS.md`/`KAI.md`/`GEMINI.md`, append it as a notice once per epoch.
-4. **Instructions before the first affected mutation** ([ADR-0023](../adr/0023-audit-corrections.md)):
+4. **Instructions before the first affected mutation** ([ADR-0016](../adr/0016-robustness-amendments.md)):
    before a transaction or a mutating shell command whose targets (edit paths, or the command's
    `cwd` and path arguments) lie under a directory whose applicable instruction files have not
    been delivered in this epoch, the mutation is **withheld**: every edit call in the response
@@ -303,7 +303,7 @@ interface TokenEstimator {
 | `provider_chain` | Gemini chained (default), OpenAI API key with `store: true` | Only the new steps plus the provider continuation handle |
 | `local_replay` | Gemini stateless, **ChatGPT subscription (always)**, OpenAI API key with `store: false` (default), compatible endpoints | The seed plus the full epoch tail every request |
 
-The provider continuation is **optional** ([ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md)):
+The provider continuation is **optional** ([ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md)):
 a `completed` event may carry none, and the compiler then stays in `local_replay`. Every epoch
 can be rebuilt from durable state in either mode, which is what makes epochs resumable after a
 crash or a route switch.

@@ -1,4 +1,4 @@
-# ADR-0017: Sign in with ChatGPT as an explicit credential route
+# ADR-0019: Sign in with ChatGPT as an explicit credential route
 
 - Status: Proposed
 - Date: 2026-10-05

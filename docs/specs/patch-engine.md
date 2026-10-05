@@ -1,7 +1,7 @@
 # Spec: Editing / Patch Engine
 
 - Package: `packages/core` (`patch/`)
-- Decision: [ADR-0007](../adr/0007-editing-protocol.md), [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md); durable commit and recovery: [ADR-0023](../adr/0023-audit-corrections.md)
+- Decision: [ADR-0007](../adr/0007-editing-protocol.md), [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md); durable commit and recovery: [ADR-0016](../adr/0016-robustness-amendments.md)
 - Collaborators: [Hallucination Firewall](hallucination-firewall.md), [Read Ledger](read-ledger.md), [Repo Index](repo-index.md), Checkpoint Manager
 
 ## Responsibility

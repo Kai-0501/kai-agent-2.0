@@ -6,7 +6,7 @@ user-configured OpenAI-compatible endpoints run on a generic profile with the sa
 Hold this codebase to the standards it enforces on the models.
 
 > **Status:** architecture and type scaffold only, including the R1 release extension
-> ([ADR-0015](docs/adr/0015-release-scope-macos-multi-provider.md)). Production implementation
+> ([ADR-0017](docs/adr/0019-release-scope-macos-multi-provider.md)). Production implementation
 > starts with [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) Phase 0. Files under
 > `packages/*/src/` that begin with a `SCAFFOLD` header are type sketches, not implementations.
 

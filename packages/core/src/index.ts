@@ -8,7 +8,7 @@
  * composition root (@kai/runtime, Phase 0+). Core never imports them (AGENTS.md invariant 6).
  *
  * Map of modules to specs:
- *   provider.ts   → docs/adr/0011, docs/adr/0016, docs/specs/gemini-provider.md, openai-responses-provider.md, compatible-endpoints.md
+ *   provider.ts   → docs/adr/0011, docs/adr/0018, docs/specs/gemini-provider.md, openai-responses-provider.md, compatible-endpoints.md
  *   credentials.ts → docs/specs/credentials.md, docs/specs/chatgpt-sign-in.md
  *   profiles.ts   → docs/specs/harness-profiles.md
  *   learning.ts   → docs/specs/learning-service.md

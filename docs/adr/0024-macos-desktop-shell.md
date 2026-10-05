@@ -1,4 +1,4 @@
-# ADR-0022: macOS desktop shell and runtime hosting
+# ADR-0024: macOS desktop shell and runtime hosting
 
 - Status: Proposed
 - Date: 2026-10-05

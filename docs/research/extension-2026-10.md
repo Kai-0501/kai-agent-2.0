@@ -1,8 +1,8 @@
 # Extension research: subscriptions, profiles, endpoints, learning and Chrome research
 
 - Accessed: **2026-10-05** (all sources below)
-- Scope: the six release features added by [ADR-0015](../adr/0015-release-scope-macos-multi-provider.md)
-- Consumers: ADRs [0015](../adr/0015-release-scope-macos-multi-provider.md)–[0023](../adr/0023-audit-corrections.md)
+- Scope: the six release features added by [ADR-0017](../adr/0017-release-scope-macos-multi-provider.md)
+- Consumers: ADRs [0017](../adr/0017-release-scope-macos-multi-provider.md)–[0016](../adr/0016-robustness-amendments.md)
   and the specs they reference
 
 This note separates **what a source documents or shows** from **what Kai proposes**. Every
@@ -65,7 +65,7 @@ harness patterns that also apply to Kai's own loop.
 
 | Finding | Label | Consequence for Kai |
 |---|---|---|
-| Effort is the main reasoning control; level names do not mean the same amount of thinking across models; test levels against evals instead of carrying values over | D | Kai's canonical effort must not be a universal enum. Profiles map intent to each model's native levels, and the benchmark calibrates per model ([ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md)) |
+| Effort is the main reasoning control; level names do not mean the same amount of thinking across models; test levels against evals instead of carrying values over | D | Kai's canonical effort must not be a universal enum. Profiles map intent to each model's native levels, and the benchmark calibrates per model ([ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md)) |
 | Changing top-level effort between requests invalidates the prompt cache; per-message effort keeps it | D | Effort changes are a cache-relevant event. Profiles declare whether native effort changes are cache-safe; the Governor batches changes (I) |
 | Treat a text-only end of turn as a report, not proof of completion; keep a checklist; continue at most two or three times automatically | D | Matches Kai's "no tool call" notice and the two-text-turn `blocked` rule. Kai keeps completion tied to the Verification Engine |
 | Mark pasted text with ID-tagged blocks; tool results and web pages are injection vectors | D | Same channel discipline as Kai's `<kai_notice>`. Web content gets its own untrusted wrapper ([chrome-research](../specs/chrome-research.md)) |
@@ -119,7 +119,7 @@ documented eligibility:
   assumed.
 
 The route is gated by a `release.distribution` setting so a build cannot silently enable the
-subscription route for an ineligible distribution ([ADR-0017](../adr/0017-sign-in-with-chatgpt-route.md)).
+subscription route for an ineligible distribution ([ADR-0019](../adr/0019-sign-in-with-chatgpt-route.md)).
 
 ### What Kai must not copy
 
@@ -153,7 +153,7 @@ its own dynamic registration, a `127.0.0.1` redirect, and `api.openai.com/v1/res
 **Decision input (I):** `playwright-core` with the installed Chrome, an app-owned profile
 directory and the pipe transport gives Kai semantic locators, accessibility snapshots, request
 routing and download control without writing a CDP client. Raw CDP would save one dependency but
-not simplify the required operations ([ADR-0021](../adr/0021-chrome-research.md)).
+not simplify the required operations ([ADR-0023](../adr/0023-chrome-research.md)).
 
 ## 5. Hermes procedural learning (R17–R18)
 
@@ -202,7 +202,7 @@ benchmark adds an OpenCode arm where feasible ([benchmark plan](../evaluation/be
 
 ## 7. Desktop packaging (I)
 
-No external source was required. The decision in [ADR-0022](../adr/0022-macos-desktop-shell.md)
+No external source was required. The decision in [ADR-0024](../adr/0024-macos-desktop-shell.md)
 rests on the repository's own constraints: a Node/TypeScript runtime ([ADR-0001](../adr/0001-implementation-language-runtime.md)),
 native SQLite bindings, a KSP boundary ([ADR-0002](../adr/0002-runtime-client-boundary.md)),
 and no Rust or Swift code today. Electron's bundled Node version, its hardened-runtime

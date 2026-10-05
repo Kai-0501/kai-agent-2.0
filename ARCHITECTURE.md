@@ -1,7 +1,7 @@
 # Kai Agent: Architecture
 
 > **Status:** proposed architecture (2026-10-05), extended for the R1 release scope
-> ([ADR-0015](docs/adr/0015-release-scope-macos-multi-provider.md)). Production implementation
+> ([ADR-0017](docs/adr/0019-release-scope-macos-multi-provider.md)). Production implementation
 > has not started. Decisions are recorded in [`docs/adr/`](docs/adr/), subsystem designs in
 > [`docs/specs/`](docs/specs/), and the evidence in [`docs/research/`](docs/research/).
 
@@ -16,7 +16,7 @@ Its measurable goals:
 1. **Materially lower unnecessary token consumption**, per task and per comparable project.
 2. **Materially reduce incorrect or hallucinated coding output.**
 3. **Get cheaper on comparable projects over time without getting worse**, through measured
-   procedural learning ([ADR-0020](docs/adr/0020-shared-procedural-learning.md)).
+   procedural learning ([ADR-0022](docs/adr/0024-shared-procedural-learning.md)).
 
 **Core philosophy:** *Give the model the smallest high-quality context it needs, and never
 trust its own claim that the implementation is correct.*
@@ -26,14 +26,14 @@ Design principles ([synthesis](docs/research/synthesis.md), [extension research]
 | # | Principle | Consequence |
 |---|---|---|
 | P1 | **The durable event log is the source of truth. Model context is a projection.** | Context can be cut aggressively without losing anything ([ADR-0004](docs/adr/0004-durable-event-session-model.md)) |
-| P2 | **Control what enters the context. Don't rewrite it.** | Ingress gating within cache-friendly append-only epochs, deliberate epoch resets, and a preflight on every request ([ADR-0005](docs/adr/0005-context-compiler-and-epochs.md), [ADR-0023](docs/adr/0023-audit-corrections.md)) |
+| P2 | **Control what enters the context. Don't rewrite it.** | Ingress gating within cache-friendly append-only epochs, deliberate epoch resets, and a preflight on every request ([ADR-0005](docs/adr/0005-context-compiler-and-epochs.md), [ADR-0016](docs/adr/0018-robustness-amendments.md)) |
 | P3 | **Reject before write.** | Hallucination-class defects never reach the worktree ([firewall](docs/specs/hallucination-firewall.md)) |
 | P4 | **Completion is a verified state, not a sentence.** | Only the Verification Engine can mark a task `verified`, for every route and profile ([ADR-0009](docs/adr/0009-verification-architecture.md)) |
 | P5 | **Deterministic first, model second.** | Briefs, loop detection, risk, integrity, learning evidence and retrieval are deterministic. LLM calls (digest, critic, retrospective) are rare and budgeted |
-| P6 | **Speak each provider natively; keep its quirks in its adapter and profile.** | Interactions for Gemini, Responses for OpenAI, probed dialects for compatible endpoints; core branches on capabilities only ([ADR-0016](docs/adr/0016-providers-routes-profiles-capabilities.md)) |
+| P6 | **Speak each provider natively; keep its quirks in its adapter and profile.** | Interactions for Gemini, Responses for OpenAI, probed dialects for compatible endpoints; core branches on capabilities only ([ADR-0018](docs/adr/0020-providers-routes-profiles-capabilities.md)) |
 | P7 | **Every mechanism is measured and can be switched off.** | Ablation flags plus telemetry; mechanisms must win in the benchmark ([ADR-0014](docs/adr/0014-measurement-gated-mechanisms.md)) |
-| P8 | **The runtime owns the workspace, credentials and browser. Clients only talk the protocol.** | Typed KSP boundary; the macOS renderer never sees a secret ([ADR-0002](docs/adr/0002-runtime-client-boundary.md), [ADR-0022](docs/adr/0022-macos-desktop-shell.md)) |
-| P9 | **The user owns the objective.** | Model plans, learned skills and critic output can add checks, never narrow criteria or weaken verification ([ADR-0023](docs/adr/0023-audit-corrections.md)) |
+| P8 | **The runtime owns the workspace, credentials and browser. Clients only talk the protocol.** | Typed KSP boundary; the macOS renderer never sees a secret ([ADR-0002](docs/adr/0002-runtime-client-boundary.md), [ADR-0024](docs/adr/0024-macos-desktop-shell.md)) |
+| P9 | **The user owns the objective.** | Model plans, learned skills and critic output can add checks, never narrow criteria or weaken verification ([ADR-0016](docs/adr/0018-robustness-amendments.md)) |
 | P10 | **Untrusted input never becomes instruction or policy.** | Repository text, tool output and web pages are data; learning cannot promote policy-class lessons; workspace config is restrict-only |
 | P11 | **Unknown stays unknown.** | Tri-state capabilities; unreported usage is `null`, never zero; savings are observations until a controlled evaluation |
 
@@ -328,7 +328,7 @@ user). User acceptance criteria are authoritative; derived criteria only add che
 
 ## 10. Model routes, profiles and capability snapshots
 
-[ADR-0016](docs/adr/0016-providers-routes-profiles-capabilities.md) separates four concepts:
+[ADR-0018](docs/adr/0020-providers-routes-profiles-capabilities.md) separates four concepts:
 **provider adapter** (wire protocol), **credential route** (authorization and usage class),
 **harness profile** (model-facing behaviour) and **capability snapshot** (effective tri-state
 support for this model, endpoint, route and account).
@@ -360,7 +360,7 @@ flowchart LR
 ```
 
 Details: [learning-service](docs/specs/learning-service.md),
-[ADR-0020](docs/adr/0020-shared-procedural-learning.md).
+[ADR-0022](docs/adr/0024-shared-procedural-learning.md).
 
 ## 12. Chrome research
 
@@ -368,14 +368,14 @@ Details: [learning-service](docs/specs/learning-service.md),
 worker (`playwright-core`, app-owned profile, `--remote-debugging-pipe`, filtering proxy).
 Results are shaped artifacts with stable source IDs; citations must resolve to excerpts the model
 actually received. Chrome is needed for research only. Details:
-[chrome-research](docs/specs/chrome-research.md), [ADR-0021](docs/adr/0021-chrome-research.md).
+[chrome-research](docs/specs/chrome-research.md), [ADR-0023](docs/adr/0016-chrome-research.md).
 
 ## 13. Product surface
 
 The macOS app (Electron: main process, sandboxed renderer, runtime in a `utilityProcess`) covers
 workspace selection, provider/model/account setup, the endpoint doctor, task progress and
 evidence, Chrome readiness and handoff, research citations, learning inspection and usage
-reporting ([macos-client](docs/specs/macos-client.md), [ADR-0022](docs/adr/0022-macos-desktop-shell.md)).
+reporting ([macos-client](docs/specs/macos-client.md), [ADR-0024](docs/adr/0024-macos-desktop-shell.md)).
 The CLI stays for development, headless runs and the benchmark.
 
 ## 14. Configuration

@@ -6,7 +6,7 @@
  * Configuration is DATA, never code: no package names, no templates, allowlisted provider
  * options. Capabilities are probed (tri-state) and cached by (endpointId, configRevision,
  * adapterVersion). Tool calls are validated WHOLE before execution.
- * Spec: docs/specs/compatible-endpoints.md · Decision: docs/adr/0019
+ * Spec: docs/specs/compatible-endpoints.md · Decision: docs/adr/0021
  */
 import type { CapabilitySnapshot, EndpointConfig, ModelProvider, Support } from "@kai/core";
 import type { ContentHash, EndpointDoctorReport, EndpointId } from "@kai/protocol";

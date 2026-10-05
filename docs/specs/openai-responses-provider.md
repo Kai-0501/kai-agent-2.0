@@ -1,7 +1,7 @@
 # Spec: OpenAI Responses provider (API key and ChatGPT subscription routes)
 
 - Package: `packages/provider-openai`
-- Decisions: [ADR-0018](../adr/0018-openai-responses-and-profile.md), [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md), [ADR-0017](../adr/0017-sign-in-with-chatgpt-route.md)
+- Decisions: [ADR-0020](../adr/0020-openai-responses-and-profile.md), [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md), [ADR-0019](../adr/0019-sign-in-with-chatgpt-route.md)
 - Research: [extension research §2](../research/extension-2026-10.md#2-sign-in-with-chatgpt-for-open-source-and-local-apps-r2r10)
 - Collaborators: [credentials](credentials.md), [harness profiles](harness-profiles.md), [Context Compiler](context-compiler.md), [telemetry](telemetry.md)
 

@@ -1,8 +1,8 @@
-# ADR-0018: OpenAI Responses adapter and the `openai` harness profile
+# ADR-0020: OpenAI Responses adapter and the `openai` harness profile
 
 - Status: Proposed
 - Date: 2026-10-05
-- Related: [specs/openai-responses-provider.md](../specs/openai-responses-provider.md), [specs/harness-profiles.md](../specs/harness-profiles.md), [specs/critic.md](../specs/critic.md), [ADR-0016](0016-providers-routes-profiles-capabilities.md), [ADR-0017](0017-sign-in-with-chatgpt-route.md)
+- Related: [specs/openai-responses-provider.md](../specs/openai-responses-provider.md), [specs/harness-profiles.md](../specs/harness-profiles.md), [specs/critic.md](../specs/critic.md), [ADR-0018](0018-providers-routes-profiles-capabilities.md), [ADR-0019](0019-sign-in-with-chatgpt-route.md)
 
 ## Context / problem
 

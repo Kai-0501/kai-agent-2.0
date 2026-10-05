@@ -1,7 +1,7 @@
 # Spec: Kai Session Protocol (KSP)
 
 - Package: `packages/protocol`
-- Decision: [ADR-0002](../adr/0002-runtime-client-boundary.md); amended by [ADR-0022](../adr/0022-macos-desktop-shell.md) (macOS app client, `MessagePort` transport) and ADRs [0016](../adr/0016-providers-routes-profiles-capabilities.md)–[0021](../adr/0021-chrome-research.md) (routes, auth, endpoints, learning, research)
+- Decision: [ADR-0002](../adr/0002-runtime-client-boundary.md); amended by [ADR-0024](../adr/0024-macos-desktop-shell.md) (macOS app client, `MessagePort` transport) and ADRs [0018](../adr/0018-providers-routes-profiles-capabilities.md)–[0023](../adr/0023-chrome-research.md) (routes, auth, endpoints, learning, research)
 
 ## Responsibility
 

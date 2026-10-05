@@ -3,7 +3,7 @@
  *
  * Context Compiler: budgeted epoch seeds + ingress admission + request preflight + epoch
  * decisions + route switches + complete manifests.
- * Spec: docs/specs/context-compiler.md · Decisions: docs/adr/0005, docs/adr/0016, docs/adr/0023.
+ * Spec: docs/specs/context-compiler.md · Decisions: docs/adr/0005, docs/adr/0018, docs/adr/0016.
  */
 import type { ContentHash, EpochId, PlanItem, RouteId, TaskId, TaskState, ToolCallId, TurnId } from "@kai/protocol";
 import type { SymbolCard } from "./codeintel.js";

@@ -3,7 +3,7 @@
  *
  * Verification Engine: task state machine, profile, tiers, completion gate, lazy baselines,
  * baseline-backed flaky classification, review obligations.
- * Spec: docs/specs/verification-engine.md · Decisions: docs/adr/0009, docs/adr/0023.
+ * Spec: docs/specs/verification-engine.md · Decisions: docs/adr/0009, docs/adr/0016.
  */
 import type { ArtifactId, FinalTaskState, TaskId } from "@kai/protocol";
 import type { CriticFinding, FindingDisposition, ReviewObligation } from "./critic.js";
@@ -41,7 +41,7 @@ export interface VerificationProfile {
   readonly knownFlaky?: readonly string[];
 }
 
-/** introduced_intermittent: passes on rerun now, but stable at baseline → blocks (docs/adr/0023). */
+/** introduced_intermittent: passes on rerun now, but stable at baseline → blocks (docs/adr/0016). */
 export type FailureClassification = "introduced" | "introduced_intermittent" | "pre_existing" | "flaky";
 
 export interface CheckResult {

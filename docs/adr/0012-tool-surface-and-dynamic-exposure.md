@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-10-05
 - Related: [specs/tool-surface.md](../specs/tool-surface.md), [research/gemini-api.md §7–9](../research/gemini-api.md#7-function-calling-and-tool-control), [research/synthesis.md §2.2](../research/synthesis.md#22-dynamic-tool-exposure-is-worth-less-than-it-sounds)
-- Partially superseded by: [ADR-0021](0021-chrome-research.md) (the `research` pack) and [ADR-0023](0023-audit-corrections.md) (`update_plan` can no longer set the objective or acceptance criteria)
+- Partially superseded by: [ADR-0023](0023-chrome-research.md) (the `research` pack)
 
 ## Context / problem
 

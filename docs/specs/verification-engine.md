@@ -1,7 +1,7 @@
 # Spec: Verification Engine
 
 - Package: `packages/core` (`verify/`)
-- Decision: [ADR-0009](../adr/0009-verification-architecture.md); amended by [ADR-0023](../adr/0023-audit-corrections.md) (user-owned criteria, baseline-backed flakiness, review obligations)
+- Decision: [ADR-0009](../adr/0009-verification-architecture.md); amended by [ADR-0016](../adr/0016-robustness-amendments.md) (user-owned criteria, baseline-backed flakiness, review obligations)
 - Collaborators: [Artifact Store](artifact-store.md), [Test Integrity Guard](test-integrity-guard.md), [Critic](critic.md), [Repair/Replan Controller](repair-replan-controller.md), Checkpoint Manager
 
 ## Responsibility

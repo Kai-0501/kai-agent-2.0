@@ -28,15 +28,14 @@ decision section of an existing ADR. Typo fixes and added links are fine.
 | [0012](0012-tool-surface-and-dynamic-exposure.md) | Tool surface and dynamic exposure | 10 stable core tools in Gemini CLI shapes; capability packs switched at epoch boundaries; `allowed_tools` for phases |
 | [0013](0013-workspace-safety-and-checkpoints.md) | Workspace safety and checkpoints | Hidden git-ref checkpoints with a private index; command policy; env sanitization; optional worktree mode |
 | [0014](0014-measurement-gated-mechanisms.md) | Measurement-gated mechanisms | Every mechanism ships with an ablation flag and telemetry, and must win in the benchmark to stay on by default |
-| [0015](0015-release-scope-macos-multi-provider.md) | Release scope | R1 is a macOS app with three model routes, shared learning and Chrome research, built on the unchanged trusted core |
-| [0016](0016-providers-routes-profiles-capabilities.md) | Providers, routes, profiles, capabilities | Separate provider adapters, credential routes, harness profiles and tri-state capability snapshots; optional continuation; unknown usage stays unknown |
-| [0017](0017-sign-in-with-chatgpt-route.md) | Sign in with ChatGPT route | The documented open-source SIWC flow as its own credential route: host identity, dynamic registration, PKCE + OIDC, Keychain, explicit quota handling |
-| [0018](0018-openai-responses-and-profile.md) | OpenAI Responses and `openai` profile | Allowlist request builders per route, verbatim native replay, calibrated effort, evidence-bound critic and explicit stop/reopen rules |
-| [0019](0019-openai-compatible-endpoints.md) | Compatible endpoints and `generic` profile | Chat Completions baseline, config as data, bounded probes, whole-call validation, limited mode without reliable tools |
-| [0020](0020-shared-procedural-learning.md) | Shared procedural learning | Project-boundary retrospectives from deterministic evidence, a separate global store via outbox, scoped versioned skills, deterministic budgeted retrieval |
-| [0021](0021-chrome-research.md) | Chrome research | `playwright-core` drives the installed Chrome with an app-owned profile over a pipe; three shaped research tools; filtering proxy; human handoff |
-| [0022](0022-macos-desktop-shell.md) | macOS desktop shell | Electron main + sandboxed renderer; runtime in a `utilityProcess`; KSP over `MessagePort` |
-| [0023](0023-audit-corrections.md) | Audit corrections | User-owned objectives, baseline-backed flakiness, durable prepared transactions, request preflight, complete manifests, instructions before mutation, review obligations |
+| [0017](0017-release-scope-macos-multi-provider.md) | Release scope | R1 is a macOS app with three model routes, shared learning and Chrome research, built on the unchanged trusted core |
+| [0018](0018-providers-routes-profiles-capabilities.md) | Providers, routes, profiles, capabilities | Separate provider adapters, credential routes, harness profiles and tri-state capability snapshots; optional continuation; unknown usage stays unknown |
+| [0019](0019-sign-in-with-chatgpt-route.md) | Sign in with ChatGPT route | The documented open-source SIWC flow as its own credential route: host identity, dynamic registration, PKCE + OIDC, Keychain, explicit quota handling |
+| [0020](0020-openai-responses-and-profile.md) | OpenAI Responses and `openai` profile | Allowlist request builders per route, verbatim native replay, calibrated effort, evidence-bound critic and explicit stop/reopen rules |
+| [0021](0021-openai-compatible-endpoints.md) | Compatible endpoints and `generic` profile | Chat Completions baseline, config as data, bounded probes, whole-call validation, limited mode without reliable tools |
+| [0022](0022-shared-procedural-learning.md) | Shared procedural learning | Project-boundary retrospectives from deterministic evidence, a separate global store via outbox, scoped versioned skills, deterministic budgeted retrieval |
+| [0023](0023-chrome-research.md) | Chrome research | `playwright-core` drives the installed Chrome with an app-owned profile over a pipe; three shaped research tools; filtering proxy; human handoff |
+| [0024](0024-macos-desktop-shell.md) | macOS desktop shell | Electron main + sandboxed renderer; runtime in a `utilityProcess`; KSP over `MessagePort` |
 
 ## Template
 

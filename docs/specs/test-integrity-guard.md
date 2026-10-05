@@ -68,7 +68,7 @@ pass.
   critic review or the user's approval (`permission.request kind="integrity"`). If the critic
   cannot run **for any reason, including an exhausted critic budget, an unavailable route or a
   profile without structured review**, the final report shows the finding prominently and the
-  task cannot be `verified` without the user's approval ([ADR-0023](../adr/0023-audit-corrections.md)).
+  task cannot be `verified` without the user's approval ([ADR-0016](../adr/0016-robustness-amendments.md)).
 - Justifications must cite the **user-owned** objective or acceptance criteria (or a deliberate
   behaviour change named in transaction instructions). Model-derived criteria cannot justify
   weakening a test.

@@ -5,7 +5,7 @@
  * rendering, effort mapping, replay, context sizing, review and stop policy). Implementations
  * (gemini, openai, generic) live in the planned `profiles` package; core never branches on their
  * ids. A profile can never relax what is accepted (docs/specs/harness-profiles.md).
- * Decisions: docs/adr/0016, docs/adr/0018, docs/adr/0019.
+ * Decisions: docs/adr/0018, docs/adr/0020, docs/adr/0021.
  */
 import type { ContentHash, EffortLevel, ProfileId } from "@kai/protocol";
 import type { ContextBudget } from "./context.js";

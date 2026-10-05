@@ -2,7 +2,7 @@
  * SCAFFOLD: types only. Not an implementation.
  *
  * Provider-neutral canonical turn types, capability snapshots and the ModelProvider port.
- * Decisions: docs/adr/0011-provider-extensibility-boundary.md, docs/adr/0016-providers-routes-profiles-capabilities.md
+ * Decisions: docs/adr/0011-provider-extensibility-boundary.md, docs/adr/0020-providers-routes-profiles-capabilities.md
  * Adapters: docs/specs/gemini-provider.md, docs/specs/openai-responses-provider.md, docs/specs/compatible-endpoints.md
  *
  * The canonical step model is a superset shaped by the richest providers (Gemini Interactions
@@ -24,7 +24,7 @@ import type {
 export type ProviderId = "gemini" | "openai" | "compatible" | "fake";
 export type ModelId = string;
 
-/** Tri-state support with provenance (docs/adr/0016). Unknown is never treated as supported. */
+/** Tri-state support with provenance (docs/adr/0018). Unknown is never treated as supported. */
 export type Support = "supported" | "unsupported" | "unknown";
 export interface SupportFact {
   readonly support: Support;
@@ -194,7 +194,7 @@ export type ProviderTurnEvent =
       readonly type: "completed";
       readonly status: TurnStatus;
       readonly usage: TurnUsage;
-      /** Absent when the route has no provider-side continuation (docs/adr/0016). */
+      /** Absent when the route has no provider-side continuation (docs/adr/0018). */
       readonly continuation?: StateHandle;
       /** Provider-native items of this response, stored for local replay. */
       readonly replayItems?: readonly Extract<CanonicalStep, { kind: "replay_native" }>[];

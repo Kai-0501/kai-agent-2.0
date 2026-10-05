@@ -1,7 +1,7 @@
 # Spec: Token and Correctness Telemetry
 
 - Package: `packages/core` (`telemetry/`)
-- Decision: [ADR-0010](../adr/0010-telemetry.md); amended by [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md) (unknown usage, usage classes) and [ADR-0020](../adr/0020-shared-procedural-learning.md) (project resource ledger)
+- Decision: [ADR-0010](../adr/0010-telemetry.md); amended by [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md) (unknown usage, usage classes) and [ADR-0022](../adr/0022-shared-procedural-learning.md) (project resource ledger)
 
 ## Responsibility
 

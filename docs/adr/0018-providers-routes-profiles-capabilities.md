@@ -1,4 +1,4 @@
-# ADR-0016: Provider adapters, credential routes, harness profiles and capability snapshots
+# ADR-0018: Provider adapters, credential routes, harness profiles and capability snapshots
 
 - Status: Proposed
 - Date: 2026-10-05

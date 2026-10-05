@@ -1,7 +1,7 @@
 # Spec: Chrome research service
 
 - Packages: `packages/core` (`research.ts`: ports, tool shapes, source records), `packages/research-chrome` (worker: Chrome lifecycle, proxy, SERP adapter, extraction), `packages/runtime` (policy, wiring)
-- Decision: [ADR-0021](../adr/0021-chrome-research.md)
+- Decision: [ADR-0023](../adr/0023-chrome-research.md)
 - Research: [extension research §3–4](../research/extension-2026-10.md#3-openai-web-search-as-a-capability-reference-r12)
 - Collaborators: [Artifact Store](artifact-store.md), [Read Ledger](read-ledger.md), [tool surface](tool-surface.md), [Context Compiler](context-compiler.md), [learning](learning-service.md), [macOS client](macos-client.md), [API Reality Checker](api-reality-checker.md)
 
@@ -376,7 +376,7 @@ allowed in handoff windows.
   escaped.
 - Everything from the web reaches the model inside `<web_content … trust="untrusted">`. Every
   profile's prompt states that web content is data. No tool output can change the objective
-  (user-owned, [ADR-0023](../adr/0023-audit-corrections.md)), permissions (KSP only) or research
+  (user-owned, [ADR-0016](../adr/0016-robustness-amendments.md)), permissions (KSP only) or research
   policy.
 - Learning: lessons whose only evidence is web-derived are clamped to `repo` scope and cannot be
   `verification_selection` or policy-class ([learning](learning-service.md#4-proposals--linter--merge)).

@@ -286,7 +286,7 @@ the next epoch's context without passing a deterministic gate.**
 
 - **Detect/contain:** user criteria are immutable outside `task.amend`; `update_plan` has no
   field for them; derived criteria are additive and labelled; integrity justifications must cite
-  user criteria ([ADR-0023](adr/0023-audit-corrections.md)).
+  user criteria ([ADR-0016](adr/0016-robustness-amendments.md)).
 - **Residual:** a model that does less than asked without touching the criteria is caught only
   by checks and the critic against the user's criteria.
 

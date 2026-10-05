@@ -6,7 +6,7 @@
  *   - openai.chatgpt_subscription    (Sign in with ChatGPT plan usage; preview limitations)
  * Each route has an ALLOWLIST request builder: only listed top-level keys can ever be emitted,
  * and keys whose capability is "unsupported" are dropped (property-tested).
- * Spec: docs/specs/openai-responses-provider.md · Decisions: docs/adr/0017, docs/adr/0018
+ * Spec: docs/specs/openai-responses-provider.md · Decisions: docs/adr/0019, docs/adr/0020
  * Research: docs/research/extension-2026-10.md §2 (open questions O4–O8)
  *
  * Mapping summary (canonical → Responses):

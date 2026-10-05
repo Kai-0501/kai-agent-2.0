@@ -2,7 +2,7 @@
 
 - Package: `packages/core` (`critic/`)
 - Research: [OpenHands critics](../research/upstream/openhands.md), [synthesis §2.6](../research/synthesis.md#26-the-critic-is-the-most-expensive-mechanism-so-it-is-the-most-selective)
-- Amended by: [ADR-0018](../adr/0018-openai-responses-and-profile.md) (evidence-bound findings, blocking vs advisory, stopping), [ADR-0023](../adr/0023-audit-corrections.md) (review obligations survive budgets)
+- Amended by: [ADR-0020](../adr/0020-openai-responses-and-profile.md) (evidence-bound findings, blocking vs advisory, stopping), [ADR-0016](../adr/0016-robustness-amendments.md) (review obligations survive budgets)
 - Profile policies: [harness profiles](harness-profiles.md#review-and-stopping-policy)
 
 ## Responsibility

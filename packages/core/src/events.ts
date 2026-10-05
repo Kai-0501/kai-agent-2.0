@@ -3,7 +3,7 @@
  *
  * Append-only event log + projections of the WORKSPACE store. The global learning store and the
  * app store have their own logs; no transaction spans stores (docs/specs/event-model.md#stores).
- * Spec: docs/specs/event-model.md · Decisions: docs/adr/0004, docs/adr/0016, docs/adr/0020, docs/adr/0021, docs/adr/0023.
+ * Spec: docs/specs/event-model.md · Decisions: docs/adr/0004, docs/adr/0018, docs/adr/0022, docs/adr/0023, docs/adr/0016.
  * Only a representative subset of event payloads is typed here; the full catalog is in the spec.
  * Invariant: no payload contains secret material (keys, tokens, codes, verifiers, state, nonce, cookies).
  */
@@ -64,7 +64,7 @@ export interface KaiEventPayloads {
   UserMessage: { text: string };
   SteeringMessage: { taskId: TaskId; text: string };
   TaskCreated: { taskId: TaskId; projectId: ProjectId; objective: string; acceptance: string[]; scopeHints: string[]; owner: "user" };
-  /** The only way user-owned criteria change (docs/adr/0023). */
+  /** The only way user-owned criteria change (docs/adr/0016). */
   TaskAmended: { taskId: TaskId; objective?: string; acceptance?: string[]; by: "user" };
   DerivedCriteriaRecorded: { taskId: TaskId; criteria: string[] };
   TaskStateChanged: { taskId: TaskId; from: TaskState; to: TaskState; reason: string };
