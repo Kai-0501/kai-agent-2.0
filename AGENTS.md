@@ -26,13 +26,17 @@ spec in the same PR as the code, and explain why in the PR description.
    Model context is a projection, built only by the Context Compiler.
 2. **Only the Verification Engine can mark a task `verified`.** No code path may set it from a
    model claim, a tool result or a client request.
-3. **Nothing reaches the worktree except through a Patch Engine transaction**, which means
-   overlay, firewall, hash check, then atomic commit, with a reverse patch recorded. Tools must
-   not write files directly. Shell commands are the only other writers, and they are
-   policy-gated and checkpointed.
-4. **Nothing reaches the model except through the Context Compiler's seed or ingress path.**
-   Every tool result is shaped (Result Shaper and Read Ledger) and counted in the manifest.
-   There is no "just append the raw output" path.
+3. **Nothing reaches the worktree except through a Patch Engine transaction**: instruction
+   gate, overlay, firewall, then a **write-ahead journaled** commit (a durable
+   `TransactionPrepared` with every file's full before- and after-images *before* the first
+   write; stage, verify, swap, commit marker), with a reverse patch recorded. Startup runs crash
+   recovery before anything else. Tools must not write files directly. Shell commands are the
+   only other writers, and they are policy-gated, instruction-gated and checkpointed.
+4. **Nothing reaches the model except through the Context Compiler's seed or ingress path, and
+   no request is sent without passing preflight.** Every tool result is shaped (Result Shaper and
+   Read Ledger) and counted in a **complete** manifest that includes model-generated history.
+   There is no "just append the raw output" path, and no request is ever sent above the hard
+   limit.
 5. **Clients use only the KSP protocol** (`packages/protocol`). `packages/cli` must not import
    runtime internals.
 6. **Core depends on interfaces, not implementations.** `packages/core` must not import
@@ -44,7 +48,17 @@ spec in the same PR as the code, and explain why in the PR description.
 9. **Every mechanism has an ablation flag and telemetry**
    ([ADR-0014](docs/adr/0014-measurement-gated-mechanisms.md)).
 10. **Reported vs estimated tokens are never mixed.** API usage is *reported*. Kai's numbers are
-    *estimated* and labelled as such everywhere: types, UI, reports.
+    *estimated* and labelled as such everywhere: types, UI, reports. Estimated savings are shown
+    as calibrated only while request accounting reconciles with reported usage.
+11. **The user owns the requirements** ([ADR-0015](docs/adr/0015-user-owned-task-contract.md)).
+    The Task Contract is verbatim and append-only, and only user-action protocol handlers can
+    amend it (they alone can mint a `UserActionToken`). Model-authored text (plans, notes,
+    interpretations, transaction `instruction`s, claims, justification `reason`s) **never**
+    authorizes weakening a test, a check or a requirement.
+12. **Mandatory gates are never skipped for budget, mode or availability reasons.** Optional
+    reviews (the critic's `risk_review`) may be skipped and reported. Mandatory ones (integrity
+    resolution, baseline classification, the instruction gate) fail closed: unresolved means not
+    `verified` ([ADR-0016](docs/adr/0016-robustness-amendments.md)).
 
 ## Token-efficiency rules (for features you build)
 
@@ -67,6 +81,8 @@ spec in the same PR as the code, and explain why in the PR description.
 - **Fail closed on uncertainty** in gates (e.g. if the baseline cannot be computed, treat
   failures as introduced), but **degrade gracefully** in advisory checks (LSP timeouts → a
   warning, not a crash).
+- **"Passed on rerun" is not evidence of harmlessness.** Only baseline-established flakiness or
+  a user-approved exception may stop an intermittent failure from blocking.
 - Never let a flaky or slow dependency (LSP, network) block the loop indefinitely. Everything
   has a timeout and an `AbortSignal`.
 
@@ -81,7 +97,10 @@ spec in the same PR as the code, and explain why in the PR description.
   - **acceptance tests** as listed in each spec (fixtures under `fixtures/`);
   - **contract tests** against the live Gemini API (`pnpm test:contract`, requires
     `GEMINI_API_KEY`). Run them before any `@google/genai` upgrade;
-  - **property tests** for the event store (rebuild equality) and the patch engine (atomicity).
+  - **property tests** for the event store (rebuild equality) and the patch engine (atomicity);
+  - **crash-injection tests** for the transaction journal (the K1–K8 matrix in the
+    [patch-engine spec](docs/specs/patch-engine.md#acceptance-tests)). Any change to the commit
+    path must keep them green.
 - Use the **fake provider** for loop and controller tests. Record real SSE fixtures with the
   contract suite for provider unit tests.
 - Error handling: typed errors (`KaiError` with `code`, `retryable`). No silent catches.

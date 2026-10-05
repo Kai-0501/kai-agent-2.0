@@ -68,8 +68,8 @@ task goes to `blocked`, with a report.
 3. **Replan brief** (deterministic, from projections). It replaces the normal brief's
    narrative sections:
    ```
+   <task_contract version="N"> user-owned requirements, verbatim (from the Task Contract) </task_contract>
    <replan>
-   Objective: …            Acceptance: …
    Current state: diff stat + per-file intents; checkpoint reverted? yes/no
    Approaches already tried (do NOT repeat):
      1. <attempt summary from transaction instructions + touched symbols> → result: <exact failure>
@@ -86,7 +86,9 @@ task goes to `blocked`, with a report.
    (no edits). This forces a diagnosis-first turn. Restrictions are lifted once `update_plan` is
    called with a new plan.
 5. No previous model text or reasoning is carried over, only the evidence. This avoids
-   anchoring on the failed hypothesis.
+   anchoring on the failed hypothesis. The objective and acceptance criteria come **only** from
+   the [Task Contract](task-contract.md). The model's earlier plans, interpretations and
+   proposed criteria are not copied as requirements, and the replan cannot narrow them.
 
 ## Budgets (defaults)
 

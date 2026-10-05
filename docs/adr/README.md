@@ -8,8 +8,10 @@ from the benchmark or the live API contradicts it; `Accepted`, meaning implement
 `Superseded by ADR-NNNN`. All ADRs below are **Proposed**. Production implementation has not
 started.
 
-To change a decision, write a new ADR that supersedes the old one. Do not silently edit the
-decision section of an existing ADR. Typo fixes and added links are fine.
+To change a decision, write a new ADR that supersedes or **amends** the old one. Do not silently
+edit the decision section of an existing ADR. When an ADR is amended, its status line says
+"Amended by ADR-NNNN", and each affected decision point carries an inline *Amended by …* note
+summarizing the change, so readers never act on stale text. Typo fixes and added links are fine.
 
 | ADR | Decision | One-line summary |
 |---|---|---|
@@ -27,6 +29,8 @@ decision section of an existing ADR. Typo fixes and added links are fine.
 | [0012](0012-tool-surface-and-dynamic-exposure.md) | Tool surface and dynamic exposure | 10 stable core tools in Gemini CLI shapes; capability packs switched at epoch boundaries; `allowed_tools` for phases |
 | [0013](0013-workspace-safety-and-checkpoints.md) | Workspace safety and checkpoints | Hidden git-ref checkpoints with a private index; command policy; env sanitization; optional worktree mode |
 | [0014](0014-measurement-gated-mechanisms.md) | Measurement-gated mechanisms | Every mechanism ships with an ablation flag and telemetry, and must win in the benchmark to stay on by default |
+| [0015](0015-user-owned-task-contract.md) | User-owned task contract | Requirements are stored verbatim and are append-only by the user only. Model plans are non-authoritative. Weakening evidence needs a contract citation or user approval |
+| [0016](0016-robustness-amendments.md) | Robustness amendments (design review 1) | Established-only flakiness; write-ahead journaled transactions with crash recovery; request preflight; complete request accounting; pre-mutation instruction gate; mandatory vs optional critic review |
 
 ## Template
 

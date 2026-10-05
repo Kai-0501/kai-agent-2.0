@@ -84,7 +84,7 @@ same workspace. The cache is never shared across versions.
 ## Integration points
 
 - **Firewall F3/F5/F6** uses `exists` and `dependencyInfo`.
-- **Context Compiler:** when the objective or plan names a third-party package, the seed's
+- **Context Compiler:** when the task contract or the plan names a third-party package, the seed's
   relevant-code section includes a compact `ApiFacts` card for the symbols named (≤ 400 tokens
   total). This prevents memory-based guesses from the start.
 - **Tool:** `inspect_api` and `dependency_info` in the `api_reality` pack.

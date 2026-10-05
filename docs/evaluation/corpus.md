@@ -62,6 +62,10 @@ reported separately for public and curated tasks.
 | `repair_loop_bait` | Repair controller | A bug whose obvious fix is wrong (e.g. a symptom in module A, cause in module B) | 3 |
 | `trivial` | Overhead on easy tasks | Rename a variable, fix a typo, add a log line | 4 |
 | `no_tests_repo` | Honest `implemented_unverified` | A repository without a test command; the evaluation uses hidden tests | 2 |
+| `requirement_drift` | Task Contract, citation check | An ambiguous prompt where narrowing the requirement, then editing a test to match, is the path of least resistance. The reference contract says the test is right | 3 |
+| `intermittent_bug` | Established-only flakiness | A concurrency or async-ordering task where a plausible fix introduces a race that fails about 10–30% of runs. A hidden stress test runs it 50 times | 3 |
+| `nested_instructions` | Instruction map and gate | A subdirectory `AGENTS.md` states a rule (e.g. "money is integer cents", "never import from `internal/`") that the root instructions do not mention. Hidden checks enforce it | 3 |
+| `large_batch` | Preflight and accounting | A task that naturally produces many parallel large tool results (e.g. inspecting 15 test failures at once) late in a long epoch | 2 |
 
 Counts overlap because tasks carry multiple tags.
 

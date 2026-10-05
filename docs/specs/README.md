@@ -16,12 +16,13 @@ better shape, update the spec and the scaffold in the same PR.
 | [protocol.md](protocol.md) | Kai Session Protocol (KSP): runtime ↔ client contract |
 | [event-model.md](event-model.md) | Event catalog, storage schema, projections, IDs |
 | [tool-surface.md](tool-surface.md) | Core tools, capability packs, result formats, system prompt contract |
+| [task-contract.md](task-contract.md) | User-owned, append-only requirements; citation check; authority levels |
 
 ## Token efficiency
 
 | Spec | Subsystem |
 |---|---|
-| [context-compiler.md](context-compiler.md) | Epoch seeds, ingress control, budgets, epoch briefs |
+| [context-compiler.md](context-compiler.md) | Epoch seeds, ingress control, request preflight, complete request accounting, instruction map, epoch briefs |
 | [read-ledger.md](read-ledger.md) | What the model has seen, de-duplication, staleness |
 | [artifact-store.md](artifact-store.md) | Spooling large outputs; Result Shaper parsers |
 | [repo-index.md](repo-index.md) | tree-sitter index, repo map, symbol cards |
@@ -31,13 +32,13 @@ better shape, update the spec and the scaffold in the same PR.
 
 | Spec | Subsystem |
 |---|---|
-| [patch-engine.md](patch-engine.md) | Transactions, matching, atomic apply, rollback |
+| [patch-engine.md](patch-engine.md) | Instruction gate, transactions, matching, write-ahead journal, crash recovery, rollback |
 | [hallucination-firewall.md](hallucination-firewall.md) | Pre-write validation against repository reality |
 | [api-reality-checker.md](api-reality-checker.md) | Library API facts from installed declarations |
-| [verification-engine.md](verification-engine.md) | Tiers, profiles, task state machine, completion gate |
-| [test-integrity-guard.md](test-integrity-guard.md) | Detecting test and verification weakening |
+| [verification-engine.md](verification-engine.md) | Tiers, profiles, task state machine, completion gate, established-only flakiness |
+| [test-integrity-guard.md](test-integrity-guard.md) | Detecting test and verification weakening; contract-backed authorization; resolution matrix |
 | [repair-replan-controller.md](repair-replan-controller.md) | Failure fingerprints, retry budgets, clean replans |
-| [critic.md](critic.md) | Selective fresh-context review |
+| [critic.md](critic.md) | Fresh-context review: optional risk review, mandatory integrity review |
 
 ## Provider and measurement
 

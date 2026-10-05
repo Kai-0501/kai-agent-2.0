@@ -1,6 +1,6 @@
 # ADR-0012: Tool surface and dynamic tool exposure
 
-- Status: Proposed
+- Status: Proposed. Amended by [ADR-0015](0015-user-owned-task-contract.md).
 - Date: 2026-10-05
 - Related: [specs/tool-surface.md](../specs/tool-surface.md), [research/gemini-api.md §7–9](../research/gemini-api.md#7-function-calling-and-tool-control), [research/synthesis.md §2.2](../research/synthesis.md#22-dynamic-tool-exposure-is-worth-less-than-it-sounds)
 
@@ -43,7 +43,7 @@ Gemini's current API. The research found:
 | `write_file(file_path, content)` | Gemini CLI | Transactional. New files; flagged full rewrites |
 | `run_shell_command(command, description?, timeout_s?, background?)` | Gemini CLI | Policy-gated; output spooled to artifacts |
 | `read_artifact(artifact_id, query?, start_line?, end_line?)` | Kai | Narrow reads and greps into spooled output |
-| `update_plan(...)` | Kai (cf. `write_todos`) | Structured working state: plan, decisions, notes, acceptance criteria, scope |
+| `update_plan(...)` | Kai (cf. `write_todos`) | Model-authored working state: plan, decisions, notes, interpretations, proposed (additive) criteria, scope. It **cannot** change the objective or acceptance criteria, which live in the user-owned Task Contract ([ADR-0015](0015-user-owned-task-contract.md)) |
 | `complete_task(summary, claims[])` | Kai (cf. `complete_task`) | Triggers the verification gate; does not end the task by itself |
 
 **Capability packs** (declared only when active):

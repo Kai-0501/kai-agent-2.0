@@ -19,7 +19,7 @@
 | **A0: mini-swe-agent + Gemini** | [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) (bash only, linear history) with `gemini-3.8-flash` through its LiteLLM path at default settings. This is the "raw Gemini with a minimal harness" baseline. |
 | **A1: Gemini CLI** | Google's own harness, headless mode, default config (thinking HIGH, its own compression). This is the "best available Gemini-native harness" baseline. |
 | **B: Kai (full)** | All mechanisms on, default thresholds. |
-| **B−x: Kai ablations** | `--no-ledger`, `--no-spooling`, `--firewall=off`, `--firewall=advisory`, `--governor=fixed:high`, `--epochs=off` (one chain up to the hard limit), `--tools=all`, `--critic=off`, `--critic=always`, `--repair-controller=off`, `stateMode=stateless`. |
+| **B−x: Kai ablations** | `--no-ledger`, `--no-spooling`, `--firewall=off`, `--firewall=advisory`, `--governor=fixed:high`, `--epochs=off` (one chain up to the hard limit), `--tools=all`, `--critic=off` (risk review only; integrity review stays mandatory), `--critic=always`, `--repair-controller=off`, `stateMode=stateless`. |
 
 All arms: same model ID, same task prompts, same containers, same wall-clock and token caps, no
 human in the loop. Kai's and Gemini CLI's permission policies are set to auto-allow inside the
@@ -34,6 +34,7 @@ sandbox container. A0 runs commands directly in the container.
 | Resolve rate | resolved / tasks |
 | **Premature completion rate** | Runs where the agent declared success but the task is not resolved. For Kai, declaration = `complete_task`; final `verified` vs resolved is reported separately |
 | **Verified-but-wrong rate** (Kai only) | `verified` final state but not resolved. This measures verification blind spots |
+| Blocked-for-review rate (Kai only) | Final state `blocked` with `integrity_review_required`, reported separately from failures. It is the cost of fail-closed integrity gating in headless runs |
 
 ### Efficiency (per task; aggregated over resolved tasks unless noted)
 | Metric | Definition |
@@ -55,6 +56,9 @@ sandbox container. A0 runs commands directly in the container.
 | **Invented-symbol rate** | Hallucination-class diagnostics (per the [firewall table](../specs/hallucination-firewall.md#hallucination-class-diagnostic-table)) introduced per 100 changed lines, measured on **proposed** edits (Kai: including rejected ones; others: every edit action) |
 | Invented-symbol escape rate | Hallucination-class diagnostics present in the **final** diff |
 | **Test manipulation incidents** | Final diffs containing unjustified integrity findings (guard detectors run offline on all arms' final diffs) |
+| **Requirement-drift incidents** | Final diffs that weaken a test or check the user's prompt did not call for, judged against the task's reference contract (offline, all arms) |
+| **Intermittent-bug escapes** | Tasks whose final diff fails a hidden **stress test** (the relevant test run 50 times) at a rate ≥ 2%, while Kai reported `verified` |
+| **Instruction violations** | Hidden checks of rules stated in nested instruction files (e.g. a lint rule or test encoding "amounts are integer cents") that fail on the final diff |
 | Regressions | Hidden regression tests that pass at baseline but fail after the agent's change |
 | Repair turns | Turns after the first failing check until a pass or the end |
 | Human-review defects | Blind review of a stratified sample of 20 resolved diffs per arm, scored on a rubric (correctness risk, unnecessary changes, readability, test quality), 2 reviewers |
@@ -90,6 +94,14 @@ sandbox container. A0 runs commands directly in the container.
   - report generator: markdown plus JSON, per arm and ablation, with CIs.
 - Runs use `service_tier: flex` where available to reduce cost. Latency metrics are then
   reported as indicative only, or re-measured on `standard` for a subset.
+- **Harness invariants checked on every Kai run** (a violation is a bug, not a metric):
+  - no `ModelRequest` exceeds `epochHardLimit`;
+  - accounting is healthy, or savings are marked uncalibrated in the report;
+  - no `TaskContractAmended` without a user action;
+  - every `TransactionPrepared` has a terminal record.
+- **Fault-injection runs:** 10% of Kai runs are killed (SIGKILL) at a random point and resumed.
+  The evaluator checks that the workspace equals either the pre- or the post-image of every
+  in-flight transaction, and that the task resumes in a new epoch.
 - Budget caps per run: e.g. 1.5M total tokens or 30 minutes. A run hitting a cap counts as
   unresolved, and its cost is included.
 
