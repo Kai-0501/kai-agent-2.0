@@ -5,6 +5,7 @@
  * Spec: docs/specs/tool-surface.md · Decisions: docs/adr/0012, amended by docs/adr/0015.
  */
 import type { ArtifactId, EpochId, SessionId, TaskId, TurnId } from "@kai/protocol";
+import type { ResearchToolArgs } from "./research.js";
 import type { TurnCounters } from "./telemetry.js";
 
 export type CoreToolName =
@@ -21,7 +22,11 @@ export type CoreToolName =
 
 export type PackId = "code_intel" | "api_reality" | "tests" | "vcs" | "research" | "multi_file_patch";
 
-/** Argument shapes of the core tools (Zod schemas generate the JSON Schema in the implementation). */
+/**
+ * Argument shapes of the core tools (Zod schemas generate the JSON Schema in the implementation).
+ * Profiles render these (descriptions, schema dialect, aliases); aliases resolve to these names
+ * before validation and authorization (docs/specs/harness-profiles.md#tool-rendering).
+ */
 export interface CoreToolArgs {
   read_file: { file_path: string; start_line?: number; end_line?: number; refresh?: boolean };
   read_symbol: { name: string; file_path?: string; include_references?: boolean };
@@ -46,7 +51,7 @@ export interface CoreToolArgs {
   update_plan: {
     plan?: { step: string; status: "todo" | "doing" | "done" | "dropped" }[];
     decisions?: { decision: string; rationale: string }[];
-    notes?: string[];
+    notes?: (string | { text: string; sources?: string[]; time_sensitive?: boolean })[]; // sources = "src_x L1-9" citations
     /** How the model reads ambiguous requirements. Commentary; never authoritative. */
     interpretations?: string[];
     /** Extra checks the model commits to. Additive only; never relaxes a requirement. */
@@ -60,7 +65,7 @@ export interface CoreToolArgs {
 }
 
 /** Pack tools whose argument shapes matter for correctness rules. */
-export interface PackToolArgs {
+export interface PackToolArgs extends ResearchToolArgs {
   /** `tests` pack. `reason` carries no authority; only a valid contract citation backs a change. */
   justify_test_change: {
     test_id_or_path: string;

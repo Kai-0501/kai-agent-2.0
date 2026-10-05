@@ -6,7 +6,7 @@
  * Spec: docs/specs/verification-engine.md · Decisions: docs/adr/0009, amended by docs/adr/0016.
  */
 import type { ArtifactId, BlockedReason, ContentHash, FailureClassification, FinalTaskState, RunCounts, TaskId } from "@kai/protocol";
-import type { CriticFinding, IntegrityVerdict } from "./critic.js";
+import type { CriticFinding, FindingDisposition, IntegrityVerdict } from "./critic.js";
 import type { IntegrityFindingRecord } from "./integrity.js";
 
 export type Tier = "T0" | "T1" | "T2" | "T3" | "T4";
@@ -59,6 +59,8 @@ export interface CheckResult {
   readonly artifactId?: ArtifactId;
   readonly summary: string;
   readonly fingerprints: readonly string[];
+  /** Evidence for intermittency decisions. */
+  readonly reruns?: { readonly now: readonly ("pass" | "fail")[]; readonly baseline: readonly ("pass" | "fail")[] };
 }
 
 export interface EvidenceBundle {
@@ -71,7 +73,7 @@ export interface EvidenceBundle {
   readonly criteriaCoverage?: readonly { readonly entryId: string; readonly checks: readonly string[] }[];
   readonly integrity: readonly IntegrityFindingRecord[];
   readonly critic?: {
-    readonly riskReview: { readonly ran: boolean; readonly skippedReason?: string; readonly triggers: readonly string[]; readonly findings: readonly CriticFinding[] };
+    readonly riskReview: { readonly ran: boolean; readonly skippedReason?: string; readonly triggers: readonly string[]; readonly findings: readonly CriticFinding[]; readonly dispositions: readonly FindingDisposition[] };
     readonly integrityReview?: { readonly ran: boolean; readonly verdicts: readonly IntegrityVerdict[] };
   };
   readonly blockedReason?: BlockedReason;

@@ -15,6 +15,11 @@
 parsed results), or redacting secrets (redaction is applied by the process runner before storage;
 see failure handling).
 
+`web` artifacts hold extracted page text from the [Chrome research service](chrome-research.md),
+with a section index; `web_open`/`web_find` read them with the same range and query mechanics as
+`read_artifact`, and the same ledger stubbing. The redactor also runs on web text and on
+learning evidence packets ([learning](learning-service.md#1-evidence-packet-deterministic-no-model-call)).
+
 ## Data model
 
 ```ts
@@ -99,6 +104,8 @@ raw output ──► store blob (always) ──► detect parser ──► parse
 | `shaper.maxFailuresListed` | 10 |
 | `shaper.excerptFailures` | 3 |
 | `artifact.retentionDays` | 30 |
+| `research.artifactRetentionDays` | 30 (web page text; source records keep metadata and hashes after eviction) |
+| `research.artifactMaxTotalMB` | 500 (LRU eviction of `web` artifacts) |
 | `shaper.enabled` | true (ablation `--no-spooling` inlines up to the model limit, using simple head/tail truncation as baseline behaviour) |
 
 ## Events and telemetry

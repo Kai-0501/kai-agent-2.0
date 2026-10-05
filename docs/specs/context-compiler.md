@@ -1,8 +1,8 @@
 # Spec: Context Compiler
 
 - Package: `packages/core` (`context/`)
-- Decisions: [ADR-0005](../adr/0005-context-compiler-and-epochs.md), amended by [ADR-0016](../adr/0016-robustness-amendments.md); [ADR-0015](../adr/0015-user-owned-task-contract.md)
-- Collaborators: [Task Contract](task-contract.md), [Read Ledger](read-ledger.md), [Artifact Store](artifact-store.md), [Repo Index](repo-index.md), [Patch Engine](patch-engine.md) (instruction gate), [Gemini Provider](gemini-provider.md), [Reasoning Governor](reasoning-governor.md), [Telemetry](telemetry.md)
+- Decisions: [ADR-0005](../adr/0005-context-compiler-and-epochs.md), amended by [ADR-0016](../adr/0016-robustness-amendments.md) and [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md) (profiles, optional continuation, local replay, route switches); [ADR-0015](../adr/0015-user-owned-task-contract.md)
+- Collaborators: [Task Contract](task-contract.md), [Read Ledger](read-ledger.md), [Artifact Store](artifact-store.md), [Repo Index](repo-index.md), [Patch Engine](patch-engine.md) (instruction gate), [Gemini Provider](gemini-provider.md), [OpenAI Responses provider](openai-responses-provider.md), [compatible endpoints](compatible-endpoints.md), [harness profiles](harness-profiles.md), [learning](learning-service.md), [Chrome research](chrome-research.md), [Reasoning Governor](reasoning-governor.md), [Telemetry](telemetry.md)
 
 ## Responsibility
 
@@ -18,8 +18,16 @@ It also owns **epoch boundary decisions**, the **instruction map** (which projec
 files apply where), and **complete request accounting**: a manifest that attributes every token
 of every request to a category, including model-generated history.
 
-**Not responsible for:** executing tools (the Tool Registry), deciding thinking levels (the
-Governor), talking to the API (the Provider), or enforcing instructions at write time (the Patch
+It also owns **provider and route switches** at safe points
+([below](#provider-and-route-switches)).
+
+Model-facing wording (system prompt, tool rendering, notice role) comes from the active
+[harness profile](harness-profiles.md); budgets come from the profile's context sizing over the
+route's capability snapshot. The compiler itself is profile-neutral and branches only on
+capabilities.
+
+**Not responsible for:** executing tools (the Tool Registry), deciding effort (the Governor),
+talking to the API (the provider adapter), or enforcing instructions at write time (the Patch
 Engine's instruction gate, which uses this component's instruction map).
 
 ## Interfaces
@@ -42,9 +50,12 @@ interface SeedInput {
   taskId: TaskId;
   epochId: EpochId;
   reason: EpochReason;
-  budget: ContextBudget;             // from config, possibly adjusted by the governor
-  providerCaps: ModelCapabilities;
-  toolLoadout: ToolDeclaration[];    // core + active packs
+  budget: ContextBudget;             // profile.contextSizing(snapshot, config)
+  snapshot: CapabilitySnapshot;      // route + model + account effective support (ADR-0018)
+  profile: HarnessProfileRef;        // id@version; renders prompt, tools, notice role
+  continuation: "provider_chain" | "local_replay";
+  learning?: { snapshotHash: ContentHash; cards: LearnedCard[] };   // pinned per task
+  toolLoadout: ToolDeclaration[];    // core + active packs, rendered by the profile
   carriedResults?: AdmittedItems;    // pending results when rolling over mid-batch (→ <last_results>)
 }
 
@@ -76,23 +87,34 @@ Manifest, preflight and accounting types are defined in
 ## Seed layout (fixed order, for implicit-cache stability)
 
 ```
-system_instruction:   [Kai system prompt]                        ← stable across epochs and sessions
-tools:                [core + active packs]                      ← stable within epoch
+system_instruction:   [profile system prompt]                    ← stable across epochs and sessions
+tools:                [core + active packs, rendered by profile] ← stable within epoch
 input[0] user_input:  <project_instructions> root + applicable nested instruction files </project_instructions>
 input[1] user_input:  <task_contract version="N"> user-owned requirements, verbatim </task_contract>
-input[2] user_input:  <epoch_brief> working state (model-authored), files, verification, failures </epoch_brief>
-input[3] user_input:  <repo_map budget="…"> … </repo_map>
-input[4] user_input:  <relevant_code> symbol cards + excerpts </relevant_code>
-input[5] user_input:  <last_results> shaped results not yet delivered </last_results>   (optional)
-input[6] user_input:  <directive> what to do now </directive>
+input[2] user_input:  <learned_procedures advisory="true"> ≤ 3 cards </learned_procedures>   (optional; pinned per task)
+input[3] user_input:  <epoch_brief> working state (model-authored), files, verification, failures </epoch_brief>
+input[4] user_input:  <repo_map budget="…"> … </repo_map>
+input[5] user_input:  <relevant_code> symbol cards + excerpts </relevant_code>
+input[6] user_input:  <last_results> shaped results not yet delivered </last_results>   (optional)
+input[7] user_input:  <directive> what to do now </directive>
 ```
 
 The system prompt and tools are byte-identical across epochs unless the loadout changes, so even
-a new chain may hit the implicit cache for that prefix (to be measured, G5).
+a new chain may hit the implicit cache for that prefix (to be measured, G5). The learned
+procedures section is identical for every epoch of a task because the learning snapshot is
+pinned at task start ([learning](learning-service.md#retrieval)); it sits after the contract so a
+learning change never invalidates the cached system and tool prefix, and it is labelled as
+advice below the contract and repository instructions. "System instruction" maps to Gemini
+`system_instruction`, Responses `instructions`, or a Chat Completions `system`/`developer`
+message ([compatible endpoints](compatible-endpoints.md)).
 
 ## Budget model
 
-`ContextBudget` defaults for `gemini-3.8-flash`, all configurable:
+`ContextBudget` defaults for `gemini-3.8-flash`, all configurable. For other models, the active
+profile derives the budget from the capability snapshot with the
+[context sizing formula](harness-profiles.md#context-sizing); the Gemini row of that formula
+reproduces this table, and small windows scale every number down (including
+`ingressBatchMax`). A window whose usable size is below 10k tokens is `chat_only`.
 
 | Parameter | Default | Notes |
 |---|---|---|
@@ -129,6 +151,10 @@ a new chain may hit the implicit cache for that prefix (to be measured, G5).
    remaining budget is used up. Every item is either a symbol card (cheap) or an excerpt
    (definition body or a ±N-line window).
 9. Directive: always included (≤ 300 tokens).
+
+Learned procedure cards (≤ `learning.retrieval.maxTokens`, default 600) are allocated after the
+contract and before the brief's optional sections; they are dropped whole, never truncated, when
+the budget is short.
 
 ## Project instructions: instruction map and pre-mutation gate
 
@@ -231,7 +257,10 @@ For each `IngressItem`, in order:
 3. **Read-time instruction delivery** (see the instruction map).
 4. **User messages** (steering) are admitted verbatim. They have already been appended to the Task
    Contract by the protocol handler.
-5. Estimate tokens per category and emit a **pending** manifest delta. Nothing is sent until
+5. **Web content** from research tools arrives already shaped and wrapped in
+   `<web_content trust="untrusted">` ([Chrome research](chrome-research.md#trust-and-injection))
+   and is counted as `tail_web`.
+6. Estimate tokens per category and emit a **pending** manifest delta. Nothing is sent until
    preflight approves.
 
 ## Request preflight
@@ -267,8 +296,18 @@ interface PreflightResult {
   - `framing` is the calibrated per-step overhead;
   - `margin = max(preflightMarginMin × est(pending), p95 absolute ingress-estimate error over the
     last 50 measured turns)`.
-- **Stateless:** `projected` = the composition of the full request to be sent (history categories
-  sized from reported numbers, ingress estimated) plus margin.
+- **Stateless (local replay):** `projected` = the composition of the full request to be sent
+  (history categories sized from reported numbers, ingress estimated) plus margin.
+- **Routes that do not report usage** (some compatible endpoints): reported terms are
+  unavailable, so every category, including model-generated history, is **estimated** with the
+  conservative unknown-tokenizer ratio (`chars / 2.5`), the margin uses the larger safety margin
+  of [context sizing](harness-profiles.md#context-sizing), and accounting is shown as
+  `uncalibrated`. The projection is still made before every request; it is just more
+  conservative.
+- A provider error for context length means the projection was wrong: scale the route's ratios
+  by 1.15 (OpenAI) or 1.2 (compatible), start a new epoch with the pending results carried, and
+  retry once ([OpenAI](openai-responses-provider.md#errors-and-retries),
+  [compatible](compatible-endpoints.md#request-and-stream-handling)).
 
 **Decision, in order:**
 1. **Batch cap.** If `est(pending) > ingressBatchMax`, **reshape**. Re-shape the largest tool
@@ -296,13 +335,17 @@ Every token of every request must be attributed. Otherwise calibration attribute
 model-generated history to source-code or tool-result estimates, and the savings dashboard
 reports fiction.
 
-**Categories** (`ContextCategory`):
+**Categories** (`ContextCategory`). The release extension adds `learned_procedures` (seed) and
+`tail_web` (ingress). Provider-native replay items are counted by kind: reasoning items
+(Gemini thought steps, OpenAI reasoning items with encrypted content) under `history_thoughts`,
+replayed assistant messages under `history_model_text`, replayed calls under
+`history_function_calls`.
 
 | Group | Categories | Size source |
 |---|---|---|
 | Prefix | `system`, `tools` | Estimated, calibrated on seed turns |
-| Seed | `project_instructions`, `task_contract`, `brief`, `repo_map`, `relevant_code`, `last_results`, `directive` | Estimated, calibrated on seed turns |
-| Ingress | `tail_read`, `tail_search`, `tail_edit_result`, `tail_shell`, `tail_test`, `tail_artifact`, `tail_plan`, `jit_instructions`, `notices`, `user` | Estimated, calibrated on **measured ingress** |
+| Seed | `project_instructions`, `task_contract`, `learned_procedures`, `brief`, `repo_map`, `relevant_code`, `last_results`, `directive` | Estimated, calibrated on seed turns |
+| Ingress | `tail_read`, `tail_search`, `tail_edit_result`, `tail_shell`, `tail_test`, `tail_artifact`, `tail_plan`, `tail_web`, `jit_instructions`, `notices`, `user` | Estimated, calibrated on **measured ingress** |
 | **Model-generated history** | `history_model_text`, `history_function_calls` (names and arguments, e.g. the `new_string` of a `replace`), `history_thoughts` (thought steps and signatures, when carried) | **Reported** totals (previous responses' output and thought tokens). The split between text and function calls is estimated by character share and labelled as such |
 | Overhead | `framing` (step and role wrappers) | Estimated per step, calibrated |
 
@@ -333,9 +376,12 @@ measuredIngress(t) = reportedInput(t) − reportedInput(t−1) − reportedOutpu
   the identity as **violated** for that provider and model. It is reported in `kai doctor`, and
   the capability flags `chainedInputIncludesPriorOutput` and `chainedInputIncludesPriorThoughts`
   are re-probed (open question G10).
-- **Stateless mode:** the request is fully client-built, so composition is computed directly.
-  History categories use the reported numbers of the responses being replayed. The residual is
-  `reported − Σ composition`.
+- **Stateless mode (local replay):** the request is fully client-built, so composition is
+  computed directly. History categories use the reported numbers of the responses being
+  replayed. The residual is `reported − Σ composition`.
+- **Unknown usage:** when a route reports no input usage, `reportedInputTokens` and `residual` are
+  `null` (never `0`), the identity cannot be checked, and savings stay `uncalibrated` for that
+  route ([telemetry](telemetry.md)).
 
 **Trusting the savings dashboard.** Estimated savings (ledger, spooling, tool exposure) are shown
 as **calibrated** only when accounting is healthy: over the trailing 20 requests, mean
@@ -354,6 +400,8 @@ results of the last response are **not** sent to the abandoned chain. They are p
 `function_result` steps.
 
 Rules, in order (preflight may additionally force `rollover_now` at the same safe point):
+0. A provider, route, account, endpoint-configuration or model switch is pending →
+   `new_epoch(model_switch)` ([switches](#provider-and-route-switches)).
 1. A replan was requested → `new_epoch(replan)`.
 2. A previous preflight returned `send_then_rollover`, or the reported input exceeded
    `epochHardLimit` (estimator failure) → `new_epoch(soft_limit | hard_limit)`.
@@ -382,14 +430,27 @@ interface TokenEstimator {
 - Base estimate: `ceil(chars / ratio[contentType])`, where content types are `code`, `prose`,
   `json` and `numbered_code`, with initial ratios `3.2`, `4.0`, `3.0` and `2.9`. Categories map
   to content types, and ratios are learned per content type, which is more stable than per
-  category.
+  category. Ratios are kept **per route and model**, because tokenizers differ; a route without
+  reported usage keeps the conservative ratio (`chars / 2.5`).
 - **Calibration:** exponential moving average updates of the ratios from the samples above,
   weighted by each content type's share of the sample. Track the relative error of
   `measuredIngress` predictions as an accuracy metric. The target is under 5% after 20 turns.
 - Optional: plug in the `gemma3` SentencePiece tokenizer from `@google/genai` (experimental)
   once it is validated against reported usage for `gemini-3.8-flash`.
 
-## Stateless mode differences
+## Continuation modes
+
+| Mode | Used by | Request contains |
+|---|---|---|
+| `provider_chain` | Gemini chained (default), OpenAI API key with `store: true` | Only the new steps plus the provider continuation handle |
+| `local_replay` | Gemini stateless, **ChatGPT subscription (always)**, OpenAI API key with `store: false` (default), compatible endpoints | The seed plus the full epoch tail every request |
+
+The provider continuation is **optional** ([ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md)):
+a `completed` event may carry none, and the compiler then stays in `local_replay`. "Chained" in
+the preflight and accounting sections means `provider_chain`; "stateless" means
+`local_replay`.
+
+## Stateless mode differences (local replay)
 
 - Each request = seed (byte-identical) + full tail of the epoch.
 - **Batched elision:** when the estimated prunable tail (tool results older than the newest 3
@@ -400,12 +461,35 @@ interface TokenEstimator {
   never elided.
 - Thought steps with signatures from previous turns are always included unchanged (an API
   requirement), and are counted under `history_thoughts`.
+- The same holds for every **provider-native replay item** (OpenAI reasoning items with
+  `encrypted_content` and message `phase` fields, compatible `reasoning_content` when the
+  endpoint requires it). Items are tagged `(provider, routeId, accountScope, model)` and sent only
+  when every tag matches the request; otherwise they are dropped (and the epoch restarts if the
+  provider requires them). The elision batch threshold scales for small windows
+  (`clamp(0.15·U, 2k, 20k)`, [context sizing](harness-profiles.md#context-sizing)).
+
+## Provider and route switches
+
+A change of provider, route, ChatGPT account, compatible-endpoint configuration or model happens
+only at a **safe point** (no tool executing, no transaction half-applied):
+
+1. Record `ProviderSwitched {taskId, fromRoute, toRoute, fromModel, toModel, reason}`.
+2. Keep all authoritative state: the Task Contract, plan, decisions, ledger, transactions,
+   verification evidence, repair fingerprints, research sources and the learning snapshot.
+3. Drop every provider-native replay item and continuation handle from the old route; **never**
+   transplant opaque reasoning or continuation handles across providers, routes or accounts.
+4. Start a new epoch (`model_switch`) with the new profile's prompt, tool rendering and
+   budgets; pending results are carried into `<last_results>`.
+5. A switch from a `local_only` route to a `cloud` route requires the user's explicit
+   confirmation naming the privacy change; Kai never does it on its own, including on quota
+   exhaustion ([credentials](credentials.md#rules)).
 
 ## Events emitted
 
 `EpochStarted`, `EpochBriefBuilt`, `ToolLoadoutChanged`, `PromptVersioned`, `ContextElided`,
-`InstructionsIndexed`, `InstructionFilesChanged`, `PreflightDecision`, and the complete
-`inputManifest` part of `ModelRequest`.
+`InstructionsIndexed`, `InstructionFilesChanged`, `PreflightDecision`,
+`LearnedProceduresSelected`, `ProviderSwitched`, and the complete `inputManifest` part of
+`ModelRequest`.
 
 ## Failure handling
 
@@ -446,3 +530,11 @@ interface TokenEstimator {
 10. **Instruction map:** a nested `services/payments/AGENTS.md` is in the seed when the contract
     mentions `services/payments`. When it is not mentioned, the first edit under that directory
     is refused with the file's text, and the resend succeeds (with the Patch Engine).
+11. **Small window:** a scripted turn returning 6 large tool results against a 32k fake endpoint
+    without reported usage never produces a request above its limit; accounting is labelled
+    `uncalibrated`, and `reportedInputTokens` is `null`, never `0`.
+12. **Switch:** a task switched from `openai.chatgpt_subscription` to `gemini.api_key` mid-task
+    sends no OpenAI reasoning item to Gemini; the new seed contains the contract, the brief and
+    all open failures.
+13. **Learned procedures:** a skill version created while a task runs does not appear in that
+    task's later seeds; the learned section is byte-identical across its epochs.

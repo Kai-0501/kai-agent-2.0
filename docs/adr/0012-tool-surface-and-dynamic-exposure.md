@@ -3,6 +3,7 @@
 - Status: Proposed. Amended by [ADR-0015](0015-user-owned-task-contract.md).
 - Date: 2026-10-05
 - Related: [specs/tool-surface.md](../specs/tool-surface.md), [research/gemini-api.md §7–9](../research/gemini-api.md#7-function-calling-and-tool-control), [research/synthesis.md §2.2](../research/synthesis.md#22-dynamic-tool-exposure-is-worth-less-than-it-sounds)
+- Partially superseded by: [ADR-0023](0023-chrome-research.md) (the `research` pack)
 
 ## Context / problem
 

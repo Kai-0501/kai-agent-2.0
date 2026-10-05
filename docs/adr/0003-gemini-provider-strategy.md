@@ -3,6 +3,7 @@
 - Status: Proposed
 - Date: 2026-10-05
 - Related: [research/gemini-api.md](../research/gemini-api.md), [specs/gemini-provider.md](../specs/gemini-provider.md), [ADR-0005](0005-context-compiler-and-epochs.md), [ADR-0011](0011-provider-extensibility-boundary.md)
+- Amended by: [ADR-0018](0018-providers-routes-profiles-capabilities.md) (Gemini becomes one of three routes with its own `gemini` profile; behaviour unchanged) and [ADR-0023](0023-chrome-research.md) (built-in search tools are not used for research)
 
 ## Context / problem
 

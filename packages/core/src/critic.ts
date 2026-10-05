@@ -5,7 +5,9 @@
  * - risk_review: OPTIONAL, risk-triggered, own budget; skipping it never blocks `verified`.
  * - integrity_review: MANDATORY for contract-backed high-severity integrity findings, RESERVED budget;
  *   if it cannot resolve a finding, the task cannot be `verified` (user approves, or `blocked`).
- * Spec: docs/specs/critic.md · Decisions: docs/adr/0009, amended by docs/adr/0016.
+ * risk_review blocking findings need a violated contract entry or a concrete defect (reproduction or an
+ * exempt category); advisory findings never become repair items (docs/adr/0020).
+ * Spec: docs/specs/critic.md · Decisions: docs/adr/0009, amended by docs/adr/0016 and docs/adr/0020.
  */
 import type { ContractEntry, TaskId } from "@kai/protocol";
 import type { SymbolCard } from "./codeintel.js";
@@ -36,14 +38,29 @@ export interface IntegrityReviewInput {
 
 export interface CriticFinding {
   readonly severity: "blocking" | "major" | "minor";
-  readonly category: "logic" | "security" | "concurrency" | "error_handling" | "api_contract" | "tests" | "requirements";
+  readonly category: "logic" | "security" | "concurrency" | "error_handling" | "api_contract" | "tests" | "requirements" | "integrity";
   readonly path: string;
   readonly line?: number;
+  readonly requirementRef?: string; // "AC2", "objective", "constraint:…"
   readonly claim: string;
   readonly evidence: string; // quoted code must occur in the file, else downgraded to unverified_claim
   readonly contractEntryId?: string; // required for "requirements"
+  readonly impact?: string;
+  readonly reproduction?: { readonly kind: "test" | "command"; readonly command: readonly string[] }; // run by Kai; must FAIL now to confirm
   readonly suggestedCheck?: string;
   readonly unverifiedClaim?: boolean;
+}
+
+export interface FindingDisposition {
+  readonly fingerprint: string; // (path, enclosing symbol, category, normalized claim)
+  readonly disposition:
+    | "blocking_confirmed" // its reproduction was run and failed now
+    | "blocking_validated" // exempt category with valid location, quote and contract entry or impact
+    | "advisory_preference"
+    | "unverified_claim"
+    | "not_reproduced"
+    | "duplicate"
+    | "resolved";
 }
 
 export interface IntegrityVerdict {
@@ -57,7 +74,7 @@ export interface IntegrityVerdict {
 }
 
 export type RiskReviewOutcome =
-  | { readonly status: "completed"; readonly findings: readonly CriticFinding[]; readonly blocking: boolean; readonly usage: TurnUsage }
+  | { readonly status: "completed"; readonly findings: readonly CriticFinding[]; readonly dispositions: readonly FindingDisposition[]; readonly blocking: boolean; readonly usage: TurnUsage }
   | { readonly status: "skipped"; readonly reason: "no_triggers" | "mode_off" | "budget_exhausted" | "provider_error"; readonly unreviewedTriggers: readonly string[] };
 
 export type IntegrityReviewOutcome =

@@ -4,10 +4,10 @@
  * Reasoning Governor (per-request effort) and Risk Assessor.
  * Spec: docs/specs/reasoning-governor.md
  */
-import type { ReasoningEffort } from "@kai/protocol";
+import type { AppliedEffort, EffortLevel } from "@kai/protocol";
 import type { TaskContract } from "./contract.js";
 
-export type RequestPurpose = "work" | "replan" | "critic" | "decision_digest" | "probe";
+export type RequestPurpose = "work" | "replan" | "critic" | "decision_digest" | "probe" | "reflection";
 export type Phase = "explore" | "plan" | "implement" | "repair" | "verify";
 
 export interface LastTurnSummary {
@@ -35,9 +35,15 @@ export interface GovernorInput {
   readonly lastTurnWasCleanSuccess: boolean; // for de-escalation
 }
 
+/**
+ * Effort INTENT on the canonical scale after rules, floors and profile modifiers; the profile
+ * maps it to native levels (docs/specs/reasoning-governor.md, harness-profiles.md#effort-policy).
+ */
 export interface GovernorDecision {
-  readonly effort: ReasoningEffort;
-  readonly rule: string; // "R1".."R12" + modifiers, e.g. "R9+deescalate"
+  readonly effort: EffortLevel;
+  readonly applied: AppliedEffort; // "uncontrolled" when the model has no effort control
+  readonly native?: string;
+  readonly rule: string; // "R1".."R12" + modifiers, e.g. "R9+deescalate", "R8+openai:arch"
   readonly inputsDigest: string;
 }
 

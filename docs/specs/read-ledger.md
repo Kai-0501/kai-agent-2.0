@@ -51,7 +51,9 @@ Sources of ledger entries:
 - `edit_echo`: the hunk the Patch Engine returns after an applied edit. The model saw the new
   text, so the ledger records it at the new hash,
 - excerpts in an epoch seed (`relevant_code`), recorded with the seed's turn,
-- `read_artifact` ranges, keyed by artifact ID instead of path,
+- `read_artifact` ranges, keyed by artifact ID instead of path. This includes `web` artifacts
+  delivered by `web_open`/`web_find`, so citations can be checked against what was actually
+  delivered ([Chrome research](chrome-research.md#citations)),
 - `instructions`: a project instruction file delivered in the seed, as a read-time notice, or in
   an instruction-gate refusal. Recorded with its hash. The Patch Engine's
   [instruction gate](patch-engine.md#instruction-gate) asks `instructionsDelivered` before every
@@ -86,7 +88,7 @@ type RegionSeen = "seen_current" | "seen_stale" | "never_seen";
 ## Algorithms
 
 **Visibility.** In chained mode, content delivered in epoch *E* is visible for the rest of *E*.
-In stateless mode it is visible unless a `ContextElided` event covers that turn. Content from
+In local replay mode (stateless) it is visible unless a `ContextElided` event covers that turn. Content from
 earlier epochs is **not visible**; the brief carries only symbol cards and notes.
 
 **`check` decision:**

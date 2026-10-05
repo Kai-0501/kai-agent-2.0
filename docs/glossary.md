@@ -2,7 +2,7 @@
 
 | Term | Meaning |
 |---|---|
-| **Kai Runtime** | The process that owns the workspace (files, git, processes, credentials), the Session Store, and all model calls. In v1 it is hosted in-process by the CLI. |
+| **Kai Runtime** | The process that owns the workspace (files, git, processes, credentials), the stores, the research browser and all model calls. The macOS app hosts it in an Electron `utilityProcess`; the CLI hosts it in-process. |
 | **KSP (Kai Session Protocol)** | The typed JSON-RPC protocol between the runtime and clients, with a `seq`-cursored event stream ([spec](specs/protocol.md)). |
 | **Session** | A sequence of tasks in one workspace, with one event log stream. |
 | **Task** | One user request and its follow-ups, until a final verdict. Its requirements live in the Task Contract. It has a state (`open`, `in_progress`, `implemented_unverified`, `verifying`, `verification_failed`, `verified`, `blocked`, `cancelled`). |
@@ -12,7 +12,7 @@
 | **Epoch brief** | The structured, mostly deterministic summary of task state that opens each epoch: the user-owned task contract (verbatim), then the model-authored working state (plan, decisions, notes), files read and modified, verification, failures, attempts and the next action. |
 | **Ingress** | Anything appended to an epoch after the seed: shaped tool results, notices, user messages. |
 | **Harness notice** | A short `<kai_notice>` message from Kai to the model (stale files, verification results, budgets). |
-| **Chained / stateless mode** | Gemini Interactions state modes: server-held history via `previous_interaction_id` (`store: true`), or full client-sent history (`store: false`). |
+| **Chained / stateless mode** | Gemini Interactions state modes: server-held history via `previous_interaction_id` (`store: true`), or full client-sent history (`store: false`). Generalized as the `provider_chain` and `local_replay` continuation modes. |
 | **Read Ledger** | The record of exactly which source ranges, at which content hashes, the model has seen, per epoch ([spec](specs/read-ledger.md)). |
 | **Stub** | A short ledger reply in place of content already visible in the current epoch. |
 | **Artifact** | A stored, addressable (`art_xxxxxxxx`) complete tool output. |
@@ -43,3 +43,25 @@
 | **Baseline-flaky / introduced intermittent** | A failure whose flakiness is established at the task-start baseline (non-blocking) vs. one that appears now while the baseline always passed (blocking, likely a race). |
 | **Risk review / integrity review** | The critic's optional, skippable review of risky changes vs. its mandatory review of contract-backed high-severity test changes, which has a reserved budget. |
 | **Ablation flag** | A config switch that disables a mechanism, so the benchmark can measure its effect ([ADR-0014](adr/0014-measurement-gated-mechanisms.md)). |
+| **Provider adapter** | The wire-protocol layer for one API family: `provider-gemini` (Interactions), `provider-openai` (Responses), `provider-compatible` (Chat Completions, Responses when probed). |
+| **Credential route** | How a request is authorized and accounted: `gemini.api_key`, `openai.api_key`, `openai.chatgpt_subscription`, `compat:<endpoint>`. Has a live `RouteState` and a usage class ([credentials](specs/credentials.md)). |
+| **Usage class** | `api_metered`, `subscription_allowance`, `local_compute`. Never mixed in totals; subscription usage is never shown as zero cost. |
+| **Harness profile** | Model-facing behaviour on the shared runtime: prompts, tool rendering, effort policy, replay, context sizing, critic and stopping policy. `gemini`, `openai`, `generic` ([spec](specs/harness-profiles.md)). |
+| **Capability snapshot** | The effective, tri-state (`supported`/`unsupported`/`unknown`) capabilities of one model on one endpoint, route and account, with provenance and a content-derived ID. |
+| **Effort intent** | The Governor's canonical effort on the scale `none < minimal < low < medium < high < xhigh`, mapped by the profile to a model's native levels; recorded as requested and applied. |
+| **Local replay / provider chain** | Continuation modes: send the whole epoch every request (local replay), or only new items plus a provider handle (provider chain). |
+| **Replay item (provider-native)** | An opaque provider item (thought signature, encrypted reasoning, `reasoning_content`) stored verbatim and replayed only to the same provider, route, account and model. |
+| **Sign in with ChatGPT (SIWC)** | OpenAI's documented OAuth flow letting eligible ChatGPT plans authorize plan-backed API requests in open-source and local apps ([spec](specs/chatgpt-sign-in.md)). |
+| **Host identity** | The opaque, per-installation `ext_agent_host_id` sent at SIWC registration; distinct from the issued OAuth client ID. |
+| **Compatible endpoint** | A user-configured hosted or local server speaking an OpenAI-compatible dialect, probed before agent use ([spec](specs/compatible-endpoints.md)). |
+| **Chat-only mode** | The limited mode for endpoints without reliable tool calling or with too little context: no autonomous editing. |
+| **Project** | A user-named unit of work above tasks; its finalization triggers learning ([learning](specs/learning-service.md#project-lifecycle)). |
+| **Evidence packet** | The deterministic, redacted summary of a finalized project generation used for the retrospective. |
+| **Retrospective** | The immutable record (and Markdown rendering) of one project reflection. |
+| **Skill** | A small, scoped, versioned procedural document learned from projects, with lifecycle `candidate → provisional → validated → retired`. |
+| **Learning snapshot** | The set of skill versions eligible for a task, pinned by hash at task start. |
+| **Research service** | The runtime service that drives the installed Chrome (app-owned profile, pipe transport, filtering proxy) for `web_search`, `web_open`, `web_find` ([spec](specs/chrome-research.md)). |
+| **Source record / citation** | A research source with a stable `src_` ID, provenance and dates; a citation `[src_x Lx-y]` must resolve to an excerpt that was delivered to the model. |
+| **Human handoff** | A visible Kai browser window for consent pages, CAPTCHAs or sign-in walls; only the affected research operation pauses. |
+| **KAI_HOME** | Kai's app data directory (`~/Library/Application Support/Kai` on macOS) holding the app store, learning store, workspace stores, browser profile and identity. |
+

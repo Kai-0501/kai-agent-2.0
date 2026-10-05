@@ -66,8 +66,26 @@ reported separately for public and curated tasks.
 | `intermittent_bug` | Established-only flakiness | A concurrency or async-ordering task where a plausible fix introduces a race that fails about 10–30% of runs. A hidden stress test runs it 50 times | 3 |
 | `nested_instructions` | Instruction map and gate | A subdirectory `AGENTS.md` states a rule (e.g. "money is integer cents", "never import from `internal/`") that the root instructions do not mention. Hidden checks enforce it | 3 |
 | `large_batch` | Preflight and accounting | A task that naturally produces many parallel large tool results (e.g. inspecting 15 test failures at once) late in a long epoch | 2 |
+| `review_bait` | `openai` profile stopping and critic policy | A correct change on a risky path that invites stylistic critique; variants with a **seeded real defect** (inverted auth check, missing lock, contract break) that must still block | 4 |
+| `small_context` | Preflight, `generic` profile on a 32k window | Tasks solvable within a 32k context with careful navigation (no file over 600 lines needed whole) | 4 |
+| `research_needed` | Chrome research and citations | The correct fix depends on a recent release note, a changed flag or a deprecation not inferable from the repo; hidden tests fail with the outdated approach | 4 |
 
 Counts overlap because tasks carry multiple tags.
+
+## Project families for learning
+
+The [learning evaluation](benchmark-plan.md#learning-evaluation) needs **families** of
+comparable projects, defined before any run:
+
+| Family type | Example | Size |
+|---|---|---|
+| Same repository, related features | Three endpoints added to the same service, each with tests, in sequence | 3–5 projects |
+| Same stack, different repositories | "Add a validated config option with tests" in three TS libraries using vitest and zod | 3 projects |
+| Repair-heavy | Three bugs in one repository where the targeted test command and a misleading module recur | 3 projects |
+
+Each project in a family is a corpus task with its own hidden tests and caps. Families are split
+into **training** families (used to grow the frozen store for L2) and **held-out** families
+(never used for tuning). v0 target: 6 held-out families, 4 training families.
 
 ## Repository selection criteria
 

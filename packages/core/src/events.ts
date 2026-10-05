@@ -1,37 +1,55 @@
 /**
  * SCAFFOLD: types only. Not an implementation.
  *
- * Append-only event log + projections. Spec: docs/specs/event-model.md · Decisions: docs/adr/0004,
- * amended by docs/adr/0015 and docs/adr/0016.
+ * Append-only event log + projections of the WORKSPACE store. The global learning store and the
+ * app store have their own logs; no transaction spans stores (docs/specs/event-model.md#stores).
+ * Spec: docs/specs/event-model.md · Decisions: docs/adr/0004, amended by docs/adr/0015, docs/adr/0016,
+ * docs/adr/0018, docs/adr/0022 and docs/adr/0023.
  * Only a representative subset of event payloads is typed here; the full catalog is in the spec.
- * Invariant: only user-action protocol handlers emit TaskContract*, RecoveryResolved and
- * IntegrityReviewResolved {by: "user"} (see UserOnlyEventType).
+ * Invariants: only user-action protocol handlers emit TaskContract*, RecoveryResolved and
+ * IntegrityReviewResolved {by: "user"} (see UserOnlyEventType); no payload contains secret material
+ * (keys, tokens, codes, verifiers, state, nonce, cookies).
  */
 import type {
+  AppliedEffort,
   ArtifactId,
+  CapabilitySnapshotId,
+  ChromeStatus,
   CheckpointId,
   ContentHash,
   ContractEntry,
+  CredentialRef,
+  EffortLevel,
   EpochId,
   FailureClassification,
   FinalTaskState,
+  LearningJobId,
   LineRange,
-  ReasoningEffort,
+  ProjectId,
+  ProjectOutcome,
+  ResearchOpId,
+  RouteId,
+  RouteState,
   SessionId,
+  SourceId,
   TaskId,
   TaskState,
   ToolCallId,
   TransactionId,
   TurnId,
+  UsageClass,
   VerificationRunId,
 } from "@kai/protocol";
-import type { ContextManifest, EpochReason, InstructionFileRef, PreflightResult } from "./context.js";
+import type { ContextManifest, ContinuationMode, EpochReason, InstructionFileRef, PreflightResult } from "./context.js";
 import type { TaskContract, UserActionToken } from "./contract.js";
-import type { CriticMode } from "./critic.js";
+import type { CriticMode, FindingDisposition } from "./critic.js";
 import type { FirewallReport } from "./firewall.js";
+import type { RequestPurpose } from "./governor.js";
 import type { IntegrityDetectorId, JustificationStatus } from "./integrity.js";
+import type { FinalizationTrigger, SkillVersionRef } from "./learning.js";
 import type { PreparedTransaction, RecoveryChoice } from "./patch.js";
-import type { CanonicalStep, TurnStatus, TurnUsage } from "./provider.js";
+import type { CanonicalStep, CapabilitySnapshot, TurnStatus, TurnUsage } from "./provider.js";
+import type { ResearchOutcome, SourceRecord } from "./research.js";
 import type { EvidenceBundle, Tier } from "./verify.js";
 
 export interface EventEnvelope<T extends KaiEventType = KaiEventType> {
@@ -48,17 +66,17 @@ export interface EventEnvelope<T extends KaiEventType = KaiEventType> {
 }
 
 export interface KaiEventPayloads {
-  SessionStarted: { workspaceId: string; model: string; runtimeVersion: string };
+  SessionStarted: { workspaceId: string; projectId: ProjectId; routeId: RouteId; profile: string; model: string; runtimeVersion: string };
   SessionEnded: { reason: string };
   UserMessage: { text: string };
   SteeringMessage: { taskId: TaskId; text: string };
   /** The objective and acceptance live only in the contract. */
-  TaskCreated: { taskId: TaskId; scopeHints: string[] };
+  TaskCreated: { taskId: TaskId; projectId: ProjectId; scopeHints: string[] };
   TaskContractRecorded: { taskId: TaskId; contract: TaskContract };
   TaskContractAmended: { taskId: TaskId; version: number; entry: ContractEntry; by: "user" };
   TaskStateChanged: { taskId: TaskId; from: TaskState; to: TaskState; reason: string };
 
-  EpochStarted: { epochId: EpochId; reason: EpochReason; previousEpochId?: EpochId };
+  EpochStarted: { epochId: EpochId; reason: EpochReason; previousEpochId?: EpochId; continuation: ContinuationMode };
   EpochBriefBuilt: { epochId: EpochId; briefBlob: ContentHash; sections: { name: string; estTokens: number }[]; llmDigestUsed: boolean };
   ToolLoadoutChanged: { epochId: EpochId; declarationsHash: ContentHash; tools: string[]; packs: string[] };
   PromptVersioned: { systemPromptHash: ContentHash; projectInstructionsHash: ContentHash };
@@ -72,32 +90,51 @@ export interface KaiEventPayloads {
     action: PreflightResult["action"];
     reshapedItems?: number;
   };
+  LearningSnapshotPinned: { taskId: TaskId; snapshotHash: ContentHash; skillVersions: SkillVersionRef[] };
+  LearnedProceduresSelected: { epochId: EpochId; skillVersions: SkillVersionRef[]; estTokens: number };
 
+  /** Reproducibility pins (docs/specs/configuration.md#versioning-and-downgrade). */
   ModelRequest: {
     turnId: TurnId;
     epochId: EpochId;
     provider: string;
+    adapterVersion: string;
+    routeId: RouteId;
+    accountScope?: string;
+    profile: string; // "<id>@<version>"
     model: string;
-    stateMode: "chained" | "stateless";
-    previousInteractionRef?: string;
-    effort: ReasoningEffort;
+    continuation: ContinuationMode;
+    previousRef?: string;
+    purpose: RequestPurpose;
+    effort: { requested: EffortLevel; applied: AppliedEffort; native?: string };
     allowedTools?: string[];
     inputManifest: ContextManifest;
     inputBlob: ContentHash;
+    promptHash: ContentHash;
     declarationsHash: ContentHash;
-    generationConfig: Record<string, unknown>;
+    capabilitySnapshotId: CapabilitySnapshotId;
+    learningSnapshotHash?: ContentHash;
+    generationConfig: Record<string, unknown>; // the allowlisted body as sent, minus input
   };
   ModelResponse: {
     turnId: TurnId;
     status: TurnStatus;
     steps: CanonicalStep[];
-    providerRefs: { interactionId?: string };
-    usage: TurnUsage;
+    providerRefs: { interactionId?: string; responseId?: string };
+    usage: TurnUsage; // fields may be null
+    replayItemsBlob?: ContentHash;
     latencyMs: number;
     ttftMs?: number;
   };
+  CapabilitySnapshotRecorded: { snapshotId: CapabilitySnapshotId; snapshot: CapabilitySnapshot };
+  ProviderSwitched: { taskId: TaskId; fromRoute: RouteId; toRoute: RouteId; fromModel: string; toModel: string; reason: string; confirmedPrivacyChange?: boolean };
+  RouteStateChanged: { routeId: RouteId; from: RouteState["state"]; to: RouteState["state"]; reason: string };
+  RouteConfigured: { routeId: RouteId; credentialRef?: CredentialRef; usageClass: UsageClass };
+  CredentialRotated: { credentialRef: CredentialRef; version: number }; // never values
+  AuthAttemptStarted: { attemptId: string };
+  AuthAttemptFinished: { attemptId: string; result: string };
   ModelError: { turnId: TurnId; kind: string; retryable: boolean; attempt: number; message: string };
-  ReasoningDecision: { turnId: TurnId; effort: ReasoningEffort; rule: string; inputsDigest: string };
+  ReasoningDecision: { turnId: TurnId; effort: EffortLevel; applied: AppliedEffort; native?: string; rule: string; inputsDigest: string };
 
   ToolCallRequested: { toolCallId: ToolCallId; providerCallId: string; name: string; args: unknown };
   ToolCallCompleted: { toolCallId: ToolCallId; ok: boolean; resultEstTokens: number; artifactIds: ArtifactId[] };
@@ -158,7 +195,27 @@ export interface KaiEventPayloads {
   StuckDetected: { taskId: TaskId; rule: string; evidence: string };
   ReplanStarted: { taskId: TaskId; briefBlob: ContentHash };
   CriticRequested: { taskId: TaskId; mode: CriticMode; triggers: string[] };
-  CriticCompleted: { taskId: TaskId; mode: CriticMode; findingCount: number; blocking: boolean; budgetExhausted: boolean; usage: TurnUsage };
+  CriticCompleted: { taskId: TaskId; mode: CriticMode; findingCount: number; dispositions: FindingDisposition[]; blocking: boolean; budgetExhausted: boolean; usage: TurnUsage };
+
+  // Projects and learning (workspace side; docs/specs/learning-service.md#events)
+  ProjectCreated: { projectId: ProjectId; title: string };
+  ProjectStateChanged: { projectId: ProjectId; from: string; to: string };
+  /** Committed in the same transaction as LearningJobQueued. */
+  ProjectFinalized: { projectId: ProjectId; generation: number; trigger: FinalizationTrigger; outcome: ProjectOutcome; packetBlob: ContentHash };
+  LearningJobQueued: { jobId: LearningJobId; kind: "retrospective" };
+  LearningJobDelivered: { jobId: LearningJobId };
+  SkillFollowedObserved: { taskId: TaskId; skill: SkillVersionRef; signal: string };
+  UserFeedbackRecorded: { projectId?: ProjectId; taskId?: TaskId; text: string };
+
+  // Research (docs/specs/chrome-research.md#events)
+  ResearchOpStarted: { opId: ResearchOpId; taskId: TaskId; tool: "web_search" | "web_open" | "web_find"; query?: string; url?: string };
+  ResearchOpCompleted: { opId: ResearchOpId; outcome: ResearchOutcome; sourceIds: SourceId[]; ms: number; estTokens: number };
+  SourceRecorded: { source: SourceRecord };
+  CitationValidated: { sourceId: SourceId; range: LineRange; ok: boolean };
+  ResearchBudgetExhausted: { taskId: TaskId; budget: string };
+  ChromeStateChanged: { from: ChromeStatus["state"]; to: ChromeStatus["state"] };
+  HumanHandoffRequested: { opId: ResearchOpId; kind: "consent_required" | "captcha" | "sign_in_wall" };
+  HumanHandoffResolved: { opId: ResearchOpId; result: "resumed" | "abandoned" | "skipped" };
 }
 
 export type KaiEventType = keyof KaiEventPayloads;

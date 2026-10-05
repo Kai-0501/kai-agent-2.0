@@ -5,8 +5,8 @@
  * Estimated savings are shown as calibrated only while complete request accounting is healthy.
  * Spec: docs/specs/telemetry.md · Decisions: docs/adr/0010, amended by docs/adr/0016.
  */
-import type { EpochId, FinalTaskState, ReasoningEffort, SessionId, TaskId, TurnId } from "@kai/protocol";
-import type { ContextManifest, PreflightResult } from "./context.js";
+import type { AppliedEffort, EffortLevel, EpochId, FinalTaskState, RouteId, SessionId, TaskId, TurnId, UsageClass } from "@kai/protocol";
+import type { ContextManifest, ContinuationMode, PreflightResult } from "./context.js";
 import type { RequestPurpose } from "./governor.js";
 import type { TurnStatus, TurnUsage } from "./provider.js";
 
@@ -59,11 +59,14 @@ export interface TurnRecord {
   readonly ts: string;
   readonly model: string;
   readonly provider: string;
-  readonly stateMode: "chained" | "stateless";
+  readonly routeId: RouteId;
+  readonly profile: string; // "<id>@<version>"
+  readonly usageClass: UsageClass;
+  readonly continuation: ContinuationMode;
   readonly purpose: RequestPurpose;
-  readonly effort: ReasoningEffort;
+  readonly effort: { readonly requested: EffortLevel; readonly applied: AppliedEffort };
   readonly governorRule: string;
-  readonly usage: TurnUsage; // REPORTED
+  readonly usage: TurnUsage; // REPORTED; fields may be null (unknown, never zero)
   readonly latency: { readonly ttftMs?: number; readonly totalMs: number };
   readonly status: TurnStatus;
   /** COMPLETE accounting (delta + composition), each category labelled reported | estimated; residual vs reported. */
@@ -72,7 +75,33 @@ export interface TurnRecord {
   readonly preflight: { readonly projected: number; readonly action: PreflightResult["action"] };
   readonly toolCalls: readonly { readonly name: string; readonly ok: boolean; readonly resultEstTokens: number }[];
   readonly counters: TurnCounters;
-  readonly costUsd: { readonly value: number; readonly priceTableVersion: string };
+  /** Only for api_metered routes with a known price; plan usage is never $0. */
+  readonly costUsd: { readonly value: number; readonly priceTableVersion: string } | null;
+}
+
+type UsageField = "inputTokens" | "cachedTokens" | "reasoningTokens" | "outputTokens" | "toolUseTokens" | "totalTokens";
+
+/** Sum of REPORTED fields plus how many turns did not report each field ("partial"). */
+export interface UsageTotals {
+  readonly reported: Readonly<Record<UsageField, number>>;
+  readonly unreportedTurns: Readonly<Record<UsageField, number>>;
+  readonly calls: number;
+}
+
+export type ResourcePurpose = "work" | "critic" | "retry" | "replan" | "decision_digest" | "research" | "reflection" | "probe";
+
+/** Project resource ledger (docs/specs/telemetry.md#project-resource-ledger). */
+export interface ProjectResourceTotals {
+  readonly byPurpose: Readonly<Partial<Record<ResourcePurpose, UsageTotals>>>;
+  readonly byUsageClass: Readonly<Partial<Record<Exclude<UsageClass, "none">, UsageTotals>>>;
+  readonly estimated: { readonly learnedProceduresTokens: number; readonly researchResultTokens: number; readonly seedTokens: number }; // ESTIMATED
+  readonly wallClockMs: number;
+  readonly toolTimeMs: number;
+  readonly verificationTimeMs: number;
+  readonly researchTimeMs: number;
+  readonly costUsd: number | null;
+  readonly verifiedTasks: number;
+  readonly tasks: number;
 }
 
 export interface TaskSummary {
@@ -80,8 +109,8 @@ export interface TaskSummary {
   readonly finalState: FinalTaskState;
   readonly turns: number;
   readonly epochs: number;
-  readonly usageTotals: TurnUsage; // REPORTED
-  readonly costUsd: number;
+  readonly usageTotals: UsageTotals; // REPORTED, with partial counts
+  readonly costUsd: number | null;
   readonly estTokensSaved: { readonly ledger: number; readonly spooling: number; readonly toolExposureGross: number }; // ESTIMATED
   /** Gates estTokensSaved: displayed as calibrated only when healthy (trailing 20 requests, mean |residual| ≤ 5%, no identity violations). */
   readonly accounting: { readonly healthy: boolean; readonly meanAbsResidualPct: number; readonly identityViolations: number };

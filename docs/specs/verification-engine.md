@@ -6,7 +6,9 @@
 
 ## Responsibility
 
-- Own the **task state machine**. Only this engine can mark a task `verified`.
+- Own the **task state machine**. Only this engine can mark a task `verified`, for every route
+  and harness profile. Profiles, learned skills and critic output cannot change which checks are
+  required.
 - Discover and maintain the project's **verification profile**.
 - Run **tiered checks** at the right moments, classify failures as introduced, pre-existing or
   baseline-flaky (with **no** "passed on rerun, so ignore it" shortcut), and produce an
@@ -30,7 +32,7 @@ stateDiagram-v2
   verification_failed --> in_progress: repair budget remains (Repair Controller)
   verification_failed --> [*]: budget exhausted → final state verification_failed
   implemented_unverified --> [*]: no runnable checks / verification disabled → final state implemented_unverified
-  in_progress --> blocked: stuck after replan / needs user / external change conflict
+  in_progress --> blocked: stuck after replan / needs user / external change conflict / route unavailable (quota, re-auth) / context exhausted
   blocked --> in_progress: user resumes
   blocked --> [*]: headless run → final state blocked
   in_progress --> cancelled: user cancels
@@ -40,7 +42,8 @@ stateDiagram-v2
 **Final reported states:** `verified`, `verification_failed`, `implemented_unverified`,
 `blocked`, `cancelled`. The CLI shows the state prominently, never just "done". `blocked`
 always carries a reason (`stuck`, `integrity_review_required`, `recovery_conflict`,
-`external_change`, `needs_user`). In headless runs it is a final state.
+`external_change`, `needs_user`, `route` (quota, re-authentication or usage unavailable;
+resuming or switching route is the user's choice), `context_exhausted`). In headless runs it is a final state.
 
 ## Verification profile
 
@@ -230,3 +233,6 @@ reruns and baseline runs executed (with time), time per tier, `premature_complet
    `blocked` (`integrity_review_required`), not `verified`.
 11. State machine property: there is no path to `verified` without a `VerificationRunCompleted`
    for every required check.
+12. **Profile and route independence:** the same fixture task through the fake `gemini`, `openai`
+    and `generic` profiles runs the identical set of required checks at the gate, and only
+    this engine emits `verified` in each case.

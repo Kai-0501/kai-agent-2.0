@@ -3,6 +3,7 @@
 - Status: Proposed
 - Date: 2026-10-05
 - Related: [research/upstream/t3code.md](../research/upstream/t3code.md), [specs/protocol.md](../specs/protocol.md), [ADR-0004](0004-durable-event-session-model.md)
+- Partially superseded by: [ADR-0024](0024-macos-desktop-shell.md) (the macOS app is an R1 client; KSP gains a `MessagePort` transport)
 
 ## Context / problem
 

@@ -2,13 +2,16 @@
  * SCAFFOLD: types only. Not an implementation.
  *
  * Context Compiler: budgeted epoch seeds, ingress admission, REQUEST PREFLIGHT, epoch decisions,
- * instruction map, and COMPLETE request accounting (including model-generated history).
- * Spec: docs/specs/context-compiler.md · Decisions: docs/adr/0005, amended by docs/adr/0016; docs/adr/0015.
+ * instruction map, COMPLETE request accounting (including model-generated history), continuation
+ * modes and provider/route switches.
+ * Spec: docs/specs/context-compiler.md · Decisions: docs/adr/0005, amended by docs/adr/0016 and docs/adr/0018; docs/adr/0015.
  */
-import type { ContentHash, EpochId, PlanItem, TaskId, TaskState, ToolCallId } from "@kai/protocol";
+import type { ContentHash, EpochId, PlanItem, RouteId, TaskId, TaskState, ToolCallId, TurnId } from "@kai/protocol";
 import type { SymbolCard } from "./codeintel.js";
 import type { TaskContract } from "./contract.js";
-import type { CanonicalStep, ModelCapabilities, ToolDeclaration } from "./provider.js";
+import type { LearnedCard } from "./learning.js";
+import type { HarnessProfileRef } from "./profiles.js";
+import type { CanonicalStep, CapabilitySnapshot, ToolDeclaration } from "./provider.js";
 import type { ToolOutcome } from "./tools.js";
 
 export type EpochReason = "task_start" | "soft_limit" | "hard_limit" | "phase" | "replan" | "resume" | "model_switch";
@@ -21,6 +24,7 @@ export type ContextCategory =
   // seed
   | "project_instructions"
   | "task_contract"
+  | "learned_procedures"
   | "brief"
   | "repo_map"
   | "relevant_code"
@@ -34,10 +38,13 @@ export type ContextCategory =
   | "tail_test"
   | "tail_artifact"
   | "tail_plan"
+  | "tail_web"
   | "jit_instructions"
   | "notices"
   | "user"
-  // model-generated history (sized from REPORTED output/thought tokens)
+  // model-generated history (sized from REPORTED output/thought tokens; provider-native replay
+  // items are counted by kind: reasoning → history_thoughts, messages → history_model_text,
+  // calls → history_function_calls)
   | "history_model_text"
   | "history_function_calls"
   | "history_thoughts"
@@ -53,8 +60,9 @@ export interface CategoryCount {
 export interface ContextManifest {
   readonly delta: Readonly<Partial<Record<ContextCategory, CategoryCount>>>;
   readonly composition: Readonly<Partial<Record<ContextCategory, CategoryCount>>>;
-  readonly reportedInputTokens?: number; // filled in after the response
-  readonly residual?: number; // reported − Σ composition
+  /** REPORTED after the response; null = the route did not report it (never 0 for unknown). */
+  readonly reportedInputTokens?: number | null;
+  readonly residual?: number | null; // reported − Σ composition; null when reported is unknown
 }
 
 /** Defaults in docs/specs/context-compiler.md#budget-model (calibrated by the benchmark). */
@@ -72,15 +80,25 @@ export interface ContextBudget {
   readonly repoMapColdStart: number; // 8_000 (ledger empty for the task)
   readonly inlineToolResultMax: number; // 2_000 per item
   readonly noticeMax: number; // 300 (instruction deliveries exempt)
+  /** Headroom for estimator error: max(512, 3% of window); unknown tokenizer max(1024, 8%). */
+  readonly safetyMargin: number;
+  /** Minimum prunable tail before a batched elision in local replay (20_000; scaled for small windows). */
+  readonly elisionBatchTokens: number;
 }
+
+export type ContinuationMode = "provider_chain" | "local_replay";
 
 export interface SeedInput {
   readonly taskId: TaskId;
   readonly epochId: EpochId;
   readonly reason: EpochReason;
-  readonly budget: ContextBudget;
-  readonly providerCaps: ModelCapabilities;
-  readonly toolLoadout: readonly ToolDeclaration[];
+  readonly budget: ContextBudget; // profile.contextSizing(snapshot, config)
+  readonly snapshot: CapabilitySnapshot;
+  readonly profile: HarnessProfileRef;
+  readonly continuation: ContinuationMode;
+  /** Pinned per task (LearningSnapshotPinned); identical for every epoch of the task. */
+  readonly learning?: { readonly snapshotHash: ContentHash; readonly cards: readonly LearnedCard[] };
+  readonly toolLoadout: readonly ToolDeclaration[]; // rendered by the profile
   /** Pending results carried into <last_results> when rolling over mid-batch. */
   readonly carriedResults?: AdmittedItems;
 }
@@ -101,7 +119,11 @@ export type NoticeType =
   | "jit_instructions"
   | "epoch_soon"
   | "no_tool_call"
-  | "recovery";
+  | "recovery"
+  | "deliberate" // escalation for models without effort control
+  | "research_budget"
+  | "citation"
+  | "output_limit";
 
 export type IngressItem =
   | { readonly kind: "tool_result"; readonly toolCallId: ToolCallId; readonly name: string; readonly outcome: ToolOutcome<unknown> }
@@ -117,9 +139,12 @@ export interface EpochState {
   readonly epochId: EpochId;
   readonly taskId: TaskId;
   readonly startedAtTurn: number;
-  readonly lastReportedInputTokens: number;
+  /** null when the route does not report input tokens; epoch rules then use the estimate. */
+  readonly lastReportedInputTokens: number | null;
+  readonly lastEstimatedRequestTokens: number;
   readonly turnsSinceUpdatePlan: number;
-  readonly stateMode: "chained" | "stateless";
+  readonly continuation: ContinuationMode;
+  readonly routeId: RouteId;
   readonly rolloverScheduled: boolean; // set by a "send_then_rollover" preflight
 }
 
@@ -128,8 +153,19 @@ export interface EpochSignals {
   readonly phaseChanged: boolean;
   readonly idleMs: number;
   readonly externalChangesToReadFiles: boolean;
+  /** Provider, route, account, endpoint config or model switch pending (safe point only). */
   readonly modelSwitched: boolean;
   readonly recoveryRan: boolean;
+}
+
+export type PreflightAction = "reshape_results" | "batched_elision" | "new_epoch" | "drop_optional_seed_sections" | "blocked_context_exhausted";
+
+export interface PreflightResult {
+  readonly turnId: TurnId;
+  readonly estimatedRequestTokens: number;
+  readonly limit: number; // snapshot input limit − reserveOutput − safetyMargin
+  readonly actions: readonly PreflightAction[];
+  readonly fits: boolean; // false only with blocked_context_exhausted; such a request is never sent
 }
 
 export type EpochDecision = { readonly action: "continue" } | { readonly action: "new_epoch"; readonly reason: EpochReason };
@@ -140,9 +176,10 @@ export interface PreflightInput {
   /** REPORTED usage of the previous response: its output (and possibly thoughts) becomes history. */
   readonly lastResponse?: { readonly outputTokens: number; readonly thoughtTokens: number };
   readonly budget: ContextBudget;
-  readonly stateMode: "chained" | "stateless";
-  /** inputTokenLimit gives emergencyLimit; the G10 flags decide whether prior output/thoughts are carried. */
-  readonly caps: Pick<ModelCapabilities, "inputTokenLimit" | "chainedInputIncludesPriorOutput" | "chainedInputIncludesPriorThoughts">;
+  readonly continuation: ContinuationMode;
+  /** limits.inputTokens gives emergencyLimit; the G10 flags decide whether prior output/thoughts are carried;
+   *  usageFields/tokenizer select the unknown-usage fallback. */
+  readonly caps: Pick<CapabilitySnapshot, "limits" | "chainedInputIncludesPriorOutput" | "chainedInputIncludesPriorThoughts" | "usageFields" | "tokenizer">;
 }
 
 export interface PreflightResult {

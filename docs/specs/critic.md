@@ -1,7 +1,8 @@
 # Spec: Selective Independent Critic
 
 - Package: `packages/core` (`critic/`)
-- Decisions: [ADR-0009](../adr/0009-verification-architecture.md), amended by [ADR-0016](../adr/0016-robustness-amendments.md)
+- Decisions: [ADR-0009](../adr/0009-verification-architecture.md), amended by [ADR-0016](../adr/0016-robustness-amendments.md) and [ADR-0020](../adr/0020-openai-responses-and-profile.md) (evidence-bound `risk_review` findings, blocking vs advisory, profile stopping policy)
+- Profile policies: [harness profiles](harness-profiles.md#review-and-stopping-policy)
 - Research: [OpenHands critics](../research/upstream/openhands.md), [synthesis §2.6](../research/synthesis.md#26-the-critic-is-the-most-expensive-mechanism-so-it-is-the-most-selective)
 
 ## Responsibility
@@ -72,8 +73,11 @@ with up to 3 calls, each with the shared header. `integrity_review` ≤ 6k token
 - A fresh interaction (new chain, or stateless), `purpose: "critic"`. The Governor picks `high`
   for `integrity_review` and for high-risk `risk_review`, otherwise `medium`.
 - **Tools:** read-only (`read_file`, `read_symbol`, `grep_search`, `read_artifact`, plus
-  `code_intel` if active), enforced with `allowed_tools`. At most 8 tool turns for
-  `risk_review` and 3 for `integrity_review`.
+  `code_intel` if active), enforced with `allowed_tools`, or by declaring only those tools when
+  the route's snapshot marks `allowedToolsRestriction` unsupported. At most 8 tool turns for
+  `risk_review` and 3 for `integrity_review`. A profile whose snapshot lacks reliable
+  structured output (`structuredReview` not supported) skips `risk_review` (reported) and leaves
+  integrity findings unresolved for the user; it never treats them as consistent.
 - **Output** goes through a function declared only for the critic: `submit_review(findings[])`
   in `risk_review`, and `submit_integrity_verdicts(verdicts[])` in `integrity_review`. It is
   not done through `response_format`, because combining structured output with function calling
@@ -87,8 +91,19 @@ interface CriticFinding {                        // risk_review
   claim: string;                 // what is wrong
   evidence: string;              // quoted code (must match the file) and reasoning
   contractEntryId?: string;      // required for category "requirements": which user requirement is violated
-  suggestedCheck?: string;       // a concrete test or command that would demonstrate it
+  impact?: string;               // what goes wrong for whom
+  reproduction?: { kind: "test" | "command"; command: string[] };  // run by Kai; must FAIL now to confirm
+  suggestedCheck?: string;       // free-text alternative to reproduction (not executed)
 }
+
+type FindingDisposition =        // risk_review, recorded per finding
+  | "blocking_confirmed"         // its reproduction was run and failed now
+  | "blocking_validated"         // exempt category (security, concurrency, api_contract) with valid location, quote and contract entry or impact
+  | "advisory_preference"        // no violated contract entry and no concrete defect
+  | "unverified_claim"           // quote or location does not exist
+  | "not_reproduced"             // reproduction passed: the claimed defect did not show
+  | "duplicate"                  // same fingerprint as an earlier finding, code unchanged
+  | "resolved";                  // fixed in a later round
 
 interface IntegrityVerdict {                     // integrity_review
   findingId: string;
@@ -107,15 +122,29 @@ interface IntegrityVerdict {                     // integrity_review
   - `integrity_review`: a `consistent` verdict counts only if both quotes validate. A verdict
     that fails validation counts as **unavailable** (unresolved, so the user decides). It is
     never treated as consistent.
-- Blocking `risk_review` findings → `verification_failed`. They are delivered to the worker as
-  repair items (counted against the repair budget), with the critic's `suggestedCheck`
-  included. Major and minor findings go into the final report.
+- **Blocking needs more than a quote** (`risk_review`). Quote matching proves the code exists,
+  not that the diagnosis is right. A blocking finding also needs either a `reproduction` that Kai
+  runs (through the normal command policy, as a T3-style check) and that **fails** now, or an
+  exempt category (`security`, `concurrency`, `api_contract`) with a `contractEntryId` or an
+  `impact`. A reproduction that passes gives `not_reproduced` (minor). A blocking finding that
+  names neither a violated contract entry nor a concrete defect is `advisory_preference`.
+- **Deduplication:** fingerprint = `(path, enclosing symbol, category, normalized claim)`. A
+  finding with the fingerprint of an earlier disposition is `duplicate` unless the code at its
+  location changed since.
+- Confirmed or validated blocking `risk_review` findings → `verification_failed`. They are
+  delivered to the worker as repair items (counted against the repair budget), with their
+  reproduction. Advisory, major and minor findings go into the final report and **never**
+  become repair items.
 - `inconsistent` integrity verdicts → the finding stays unresolved, and the worker is told the
   change is not backed by the requirement (a repair item: restore the test or get user
   approval).
 - After the worker addresses blocking findings and the gate passes again, `risk_review`
-  **re-runs only on the files that changed since its last review** (incremental), at most twice
-  per task.
+  **re-runs only on the files that changed since its last review** (incremental): at most twice
+  per task by default, once for the `openai` profile
+  ([profile policy](harness-profiles.md#review-and-stopping-policy)).
+- **Stopping:** required checks passing with no unresolved integrity finding and no confirmed
+  blocking finding is a stopping condition. Optional review never starts a new round for
+  advisory findings.
 
 ## Modes and budgets
 
@@ -155,3 +184,6 @@ location and a test was added), and false-positive rate (from human review in th
    never `verified`.
 7. An integrity verdict `consistent` whose `contractQuote` is not in the cited entry → treated as
    unavailable (unresolved).
+8. A blocking `logic` finding whose reproduction passes → `not_reproduced`; a blocking style
+   preference → `advisory_preference`; neither starts a repair round.
+9. A repeated finding with unchanged code in round 2 → `duplicate`, not shown to the worker.
