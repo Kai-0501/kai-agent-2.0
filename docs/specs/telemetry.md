@@ -1,7 +1,7 @@
 # Spec: Token and Correctness Telemetry
 
 - Package: `packages/core` (`telemetry/`)
-- Decision: [ADR-0010](../adr/0010-telemetry.md)
+- Decision: [ADR-0010](../adr/0010-telemetry.md); amended by [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md) (unknown usage, usage classes) and [ADR-0020](../adr/0020-shared-procedural-learning.md) (project resource ledger)
 
 ## Responsibility
 
@@ -16,15 +16,24 @@ path.
 interface TurnRecord {
   turnId: TurnId; sessionId: SessionId; taskId?: TaskId; epochId: EpochId;
   ts: string;
-  model: string; provider: string; stateMode: "chained" | "stateless";
-  purpose: RequestPurpose; effort: ReasoningEffort; governorRule: string;
-  usage: TurnUsage;                    // REPORTED: input, cached, thought, output, toolUse, total
+  model: string; provider: string; routeId: RouteId; profile: string /* id@version */;
+  usageClass: "api_metered" | "subscription_allowance" | "local_compute" | "none";
+  continuation: "provider_chain" | "local_replay";
+  purpose: RequestPurpose; effort: { requested: EffortLevel; applied: EffortLevel | "uncontrolled" };
+  governorRule: string;
+  usage: TurnUsage;                    // REPORTED: input, cached, reasoning, output, toolUse, total; each number | null
   latency: { ttftMs?: number; totalMs: number };
   status: TurnStatus;
   manifest: ContextManifest;           // ESTIMATED per category; plus unattributed vs reported
   toolCalls: { name: string; ok: boolean; resultEstTokens: number }[];
   counters: TurnCounters;
-  costUsd: { value: number; priceTableVersion: string };   // derived from usage
+  costUsd: { value: number; priceTableVersion: string } | null;   // api_metered with a known price only
+}
+
+interface TurnUsage {                  // REPORTED; null = the route did not report the field
+  inputTokens: number | null; cachedTokens: number | null; reasoningTokens: number | null;
+  outputTokens: number | null; toolUseTokens: number | null; totalTokens: number | null;
+  reasoningIncludedInOutput: boolean;  // from the snapshot, so totals never double-count
 }
 
 interface TurnCounters {
@@ -52,7 +61,7 @@ interface TurnCounters {
 interface TaskSummary {
   taskId: TaskId; finalState: TaskState;
   turns: number; epochs: number;
-  usageTotals: TurnUsage; costUsd: number;
+  usageTotals: UsageTotals; costUsd: number | null;  // totals carry per-field "partial" flags
   estTokensSaved: { ledger: number; spooling: number; toolExposure: number };   // ESTIMATED
   correctness: {
     firstTxnCleanRate: number;          // share of transactions with 0 introduced errors
@@ -63,6 +72,36 @@ interface TaskSummary {
   wallClockMs: number;
 }
 ```
+
+**Unknown is not zero.** A sum over turns where some turns did not report a field is shown as
+`≥ N (partial: k of m turns unreported)`. Estimated tokens are shown beside it, labelled
+*estimated*, and never substituted into a reported column.
+
+## Project resource ledger
+
+Each finalized project gets `ProjectResourceTotals`, the basis of learning measurement
+([learning](learning-service.md#measurement)):
+
+```ts
+interface ProjectResourceTotals {
+  byPurpose: Record<"work" | "critic" | "retry" | "replan" | "decision_digest" | "research"
+                    | "reflection" | "probe", UsageTotals>;
+  byUsageClass: Record<"api_metered" | "subscription_allowance" | "local_compute", UsageTotals>;
+  estimated: { learnedProceduresTokens: number; researchResultTokens: number; seedTokens: number }; // ESTIMATED
+  wallClockMs: number; toolTimeMs: number; verificationTimeMs: number; researchTimeMs: number;
+  costUsd: number | null;              // metered routes only
+  verifiedTasks: number; tasks: number;
+}
+interface UsageTotals { reported: Record<keyof Omit<TurnUsage, "reasoningIncludedInOutput">, number>;
+                        unreportedTurns: Record<keyof Omit<TurnUsage, "reasoningIncludedInOutput">, number>;
+                        calls: number }
+```
+
+- **Failed attempts count.** Retries, failed streams and abandoned turns are attributed to
+  `retry` with whatever usage was reported.
+- **Token totals are not billing cost** across providers; cost appears only for
+  `api_metered` routes with a price table. Subscription usage is reported as plan usage in
+  tokens, never as `$0`.
 
 ## Counterfactual estimates (always labelled ESTIMATED)
 
@@ -77,6 +116,8 @@ interface TaskSummary {
 
 - **CLI live line** after each turn:
   `t14 · e3 · low · in 18.2k (cache 71%) · think 0.4k · out 0.6k · reads 3 (1 stub) · spooled 46k→1.1k · ✓ txn`
+  (unknown fields print `?`, e.g. `in ? (est 18.9k)` on a route without usage).
+- **macOS app** usage panels per task and project ([macos-client](macos-client.md#8-usage-reporting)).
 - **`kai stats`** for a task, session or workspace: totals, per-category context composition
   (stacked), top token consumers (tools), correctness counters, and cost.
 - **Export:** `kai stats --export jsonl` writes TurnRecords and TaskSummaries. The benchmark
@@ -100,3 +141,8 @@ interface TaskSummary {
    of the range.
 3. Spooling a 1 MB output records the produced and injected bytes, and the ratio is computed.
 4. `kai stats` output is stable (snapshot) for a recorded session fixture.
+5. A route that reports no cached tokens produces `cachedTokens: null` per turn and a
+   `partial` total; no zero is written.
+6. Project totals for a fixture project include critic, retry, research and reflection usage
+   under their purposes, and subscription usage under `subscription_allowance` with
+   `costUsd: null`.

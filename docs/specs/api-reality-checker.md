@@ -24,7 +24,7 @@ default).
 | 4 | **LSP probe** | A probe document in the overlay: `import * as M from "<pkg>"; M.` → completion items; `type T = typeof import("<pkg>")["<sym>"]` → hover | `import <mod>; <mod>.` → completion; hover on the symbol | `lsp` |
 | 5 | **Installed source** | JS source in `node_modules` (entry and exports map) parsed with tree-sitter for exported names | Package `.py` source parsed with tree-sitter for `def`/`class`/`__all__` | `source` |
 | 6 | **Package docs on disk** | `README.md`, `docs/` within the package | same | `local_docs` |
-| 7 | **Web** (only with `research` pack enabled and permission) | Registry page / official docs for the **exact version** | PyPI / official docs | `web` |
+| 7 | **Web** (only with research enabled; through the [Chrome research service](chrome-research.md)) | Registry page / official docs for the **exact version**, opened with `web_open` and cited by source ID | PyPI / official docs | `web` (never overrides rungs 1–6; a web fact that contradicts installed declarations is reported as a conflict) |
 | 8 | **Model memory** | — | — | `unverified` (the result says so explicitly) |
 
 Runtime introspection of Python (`python -c "import x; inspect.signature(...)"`) executes

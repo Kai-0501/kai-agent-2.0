@@ -62,8 +62,27 @@ reported separately for public and curated tasks.
 | `repair_loop_bait` | Repair controller | A bug whose obvious fix is wrong (e.g. a symptom in module A, cause in module B) | 3 |
 | `trivial` | Overhead on easy tasks | Rename a variable, fix a typo, add a log line | 4 |
 | `no_tests_repo` | Honest `implemented_unverified` | A repository without a test command; the evaluation uses hidden tests | 2 |
+| `review_bait` | `openai` profile stopping and critic policy | A correct change on a risky path that invites stylistic critique; variants with a **seeded real defect** (inverted auth check, missing lock, contract break) that must still block | 4 |
+| `small_context` | Preflight, `generic` profile on a 32k window | Tasks solvable within a 32k context with careful navigation (no file over 600 lines needed whole) | 4 |
+| `research_needed` | Chrome research and citations | The correct fix depends on a recent release note, a changed flag or a deprecation not inferable from the repo; hidden tests fail with the outdated approach | 4 |
+| `intermittent_bait` | Baseline-backed flaky classification | The obvious fix introduces a race that fails a test intermittently | 2 |
 
 Counts overlap because tasks carry multiple tags.
+
+## Project families for learning
+
+The [learning evaluation](benchmark-plan.md#learning-evaluation) needs **families** of
+comparable projects, defined before any run:
+
+| Family type | Example | Size |
+|---|---|---|
+| Same repository, related features | Three endpoints added to the same service, each with tests, in sequence | 3–5 projects |
+| Same stack, different repositories | "Add a validated config option with tests" in three TS libraries using vitest and zod | 3 projects |
+| Repair-heavy | Three bugs in one repository where the targeted test command and a misleading module recur | 3 projects |
+
+Each project in a family is a corpus task with its own hidden tests and caps. Families are split
+into **training** families (used to grow the frozen store for L2) and **held-out** families
+(never used for tuning). v0 target: 6 held-out families, 4 training families.
 
 ## Repository selection criteria
 

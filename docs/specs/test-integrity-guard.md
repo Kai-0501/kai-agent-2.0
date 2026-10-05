@@ -62,11 +62,16 @@ pass.
     the same direction as a deliberate behaviour change named in the transaction `instruction`s.
   The Guard checks this deterministically through string and semantic hints. It is not an LLM
   judgment. Ambiguous cases are marked **needs_review**.
-- **needs_review**, or **any high-severity flag** (I6, I11, I13), **triggers the Critic**,
-  which gets the test diff and the justification
-  ([critic.md](critic.md)). If the critic cannot run, the final report shows the finding
-  prominently and the task cannot be `verified` without the user's approval
-  (`permission.request kind="integrity"`).
+- **needs_review**, or **any high-severity flag** (I6, I11, I13), opens a **review
+  obligation** and **triggers the Critic**, which gets the test diff and the justification
+  ([critic.md](critic.md#review-obligations)). The obligation is discharged only by a validated
+  critic review or the user's approval (`permission.request kind="integrity"`). If the critic
+  cannot run **for any reason, including an exhausted critic budget, an unavailable route or a
+  profile without structured review**, the final report shows the finding prominently and the
+  task cannot be `verified` without the user's approval ([ADR-0023](../adr/0023-audit-corrections.md)).
+- Justifications must cite the **user-owned** objective or acceptance criteria (or a deliberate
+  behaviour change named in transaction instructions). Model-derived criteria cannot justify
+  weakening a test.
 - Interactive mode: the user can approve a flagged change in one keystroke, which counts as a
   justification by the user.
 
@@ -98,3 +103,7 @@ headline correctness metric for the benchmark.
 5. `testPathIgnorePatterns` gains a failing test's path → I13 block.
 6. A test file deleted along with the module it tests, and the objective says "remove module X" →
    justified.
+7. A justification that cites only a model-derived criterion → `invalid`.
+8. An I6 finding with the critic budget already exhausted → obligation open → task ends
+   `implemented_unverified` until the user approves.
+9. A model edit adding a test ID to `knownFlaky` in `.kai/project.json` → I13 finding.

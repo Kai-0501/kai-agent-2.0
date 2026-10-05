@@ -2,7 +2,9 @@
 
 For each failure mode: how Kai **detects** it, how it **contains** the damage, how it
 **recovers**, and the **residual risk**. Links point to the owning spec. Modes 1–15 are those
-required by the founding brief. Modes 16–28 were found during research.
+required by the founding brief. Modes 16–28 were found during research. Modes 29–50 cover the
+release extension (routes, profiles, endpoints, learning, research, the macOS app) and the audit
+corrections; [cross-feature failures](#cross-feature-failure-behaviour) are at the end.
 
 Containment principle: **nothing the model produces reaches the worktree, the task verdict, or
 the next epoch's context without passing a deterministic gate.**
@@ -59,12 +61,14 @@ the next epoch's context without passing a deterministic gate.**
 
 - **Detect:** write or rename errors during commit, or a process crash between
   `TransactionProposed` and `TransactionApplied`.
-- **Contain:** temp-file-plus-rename per file. On the first failure, the files already written
-  are restored from before-blobs. `TransactionRolledBack` is recorded.
-- **Recover:** on restart, the runtime finds a transaction proposed but neither applied nor
-  rolled back, compares disk hashes with before and after, and finishes the rollback or offers to
-  keep the change ([event model recovery](specs/event-model.md#recovery)).
-- **Residual:** power loss between `rename`s. Mitigated by `fsync` and the recovery check.
+- **Contain:** a durable **prepared manifest** (`TransactionPrepared`, with before and after
+  blobs) is committed before the first rename; temp-file-plus-rename per file; on a live failure,
+  the files already renamed are restored from before-blobs (`TransactionRolledBack`).
+- **Recover:** on restart, every prepared transaction without an outcome is resolved from its
+  manifest: all-before → abandoned, all-after → completed, mixed → rolled back, unknown hash →
+  conflict and block ([patch engine](specs/patch-engine.md#crash-recovery)).
+- **Residual:** a disk that lies about `fsync`. Recovery still never writes a path whose hash is
+  not in the manifest.
 
 ### 6. Test manipulation (weakening tests to pass)
 
@@ -205,9 +209,10 @@ the next epoch's context without passing a deterministic gate.**
 
 ### 18. Secrets leakage (into model context, artifacts or the event log)
 
-- **Contain:** environment sanitization, redaction before blobs are written, the API key is
-  never written to the DB or logs, and the privacy notice about chained-mode retention. The
-  `research` pack is off by default.
+- **Contain:** environment sanitization, redaction before blobs are written, credentials only in
+  the Keychain-backed `CredentialStore` (never in the DB, logs, KSP or model input), and the
+  privacy notice about chained-mode retention. Research needs a one-time permission, and its
+  QueryGuard keeps secrets, paths and repository code out of search queries.
 - **Residual:** secrets committed in repository files the model reads. These are sent to the
   API like any other code. The user is warned in the docs, and `.kaiignore` excludes paths from
   reads and indexing.
@@ -243,10 +248,14 @@ the next epoch's context without passing a deterministic gate.**
 - **Recover:** the user fixes `.kai/project.json`. The final state is `implemented_unverified`
   rather than a false `verified`.
 
-### 24. Flaky tests
+### 24. Flaky tests, and new intermittent failures disguised as flaky
 
-- **Contain:** rerun-based flaky classification at the gate, and a known-flaky list in the
-  profile. Flaky failures do not block, but they are reported.
+- **Contain:** a failure that passes on rerun is `flaky` only if the user-owned `knownFlaky`
+  list names it or it is intermittent **at baseline**; otherwise it is
+  `introduced_intermittent` and blocks ([verification](specs/verification-engine.md#lazy-baseline-classification)).
+  Flaky failures do not block, but they are reported.
+- **Residual:** an intermittency rare enough to pass every baseline and current run. The
+  benchmark's repeated hidden-test runs measure it.
 
 ### 25. Premature completion claim
 
@@ -270,3 +279,183 @@ the next epoch's context without passing a deterministic gate.**
 - **Contain:** blob dedup and compression, a retention policy, `kai gc`, and a free-space check
   before spooling large outputs (with streaming truncation and an explicit note when space is
   low).
+
+---
+
+### 29. The model narrows the task (objective or acceptance criteria)
+
+- **Detect/contain:** user criteria are immutable outside `task.amend`; `update_plan` has no
+  field for them; derived criteria are additive and labelled; integrity justifications must cite
+  user criteria ([ADR-0023](adr/0023-audit-corrections.md)).
+- **Residual:** a model that does less than asked without touching the criteria is caught only
+  by checks and the critic against the user's criteria.
+
+### 30. Over-limit request on a small or stateless context
+
+- **Detect/contain:** the request preflight sizes the complete pending request (including replay
+  items and batched results) with conservative estimates; re-shape → elide → new epoch → honest
+  `blocked {context_exhausted}` ([context compiler](specs/context-compiler.md#request-preflight)).
+- **Recover:** a provider context-length error recalibrates the estimator and retries once.
+
+### 31. Nested instructions seen too late
+
+- **Contain:** the first mutation under a subtree with unseen instructions is withheld and the
+  instructions delivered; the model reconsiders before anything is written.
+
+### 32. Mandatory review silently skipped
+
+- **Contain:** review obligations survive critic budgets, route failures and profiles without
+  structured review; the task ends `implemented_unverified` until a validated review or the user
+  discharges them ([critic](specs/critic.md#review-obligations)).
+
+### 33. OAuth sign-in attack or mix-up (CSRF, code injection, wrong account)
+
+- **Detect:** `state` (constant-time), PKCE `S256`, `nonce`, ID-token signature, issuer,
+  audience and expiry checks; account-key match on re-sign-in; a single-path, single-attempt
+  `127.0.0.1` listener with a 10-minute expiry ([sign-in](specs/chatgpt-sign-in.md#callback-validation-in-order-first-failure-ends-the-attempt)).
+- **Contain:** nothing is stored before all checks pass (except the issued client registration,
+  which carries no token).
+- **Residual:** malware running as the same user can read local memory; out of scope.
+
+### 34. Subscription quota exhausted (including mid-stream)
+
+- **Detect:** `429 subscription_sharing_usage_limit_exceeded`, at any point of a stream.
+- **Contain:** nothing from the failed turn executes; the route goes `quota_exhausted`; the task
+  pauses with state intact; no reset time is invented; **no automatic switch** to a paid API or
+  another provider ([credentials](specs/credentials.md#rules)).
+- **Recover:** the user resumes later or explicitly switches route.
+
+### 35. Refresh races and revoked access
+
+- **Contain:** single-flight refresh across processes with compare-and-swap of rotated tokens;
+  `invalid_grant` → `reauth_required`; tasks pause.
+- **Residual:** a refresh token rotated by OpenAI while Kai was offline and then rejected
+  requires a new sign-in; the UI says so.
+
+### 36. A stream fails after text or calls arrived
+
+- **Contain:** success requires the terminal completion event; partial text is shown as
+  interrupted and is not added to the epoch; no tool call from the attempt runs; the identical
+  request is retried within limits ([OpenAI provider](specs/openai-responses-provider.md#streaming)).
+
+### 37. A request field the route does not accept
+
+- **Contain:** allowlist request builders per route; a property test proves no disallowed key
+  is emitted; an API error on an allowlisted key marks it unsupported and retries once without it.
+
+### 38. Malformed, incomplete or invented tool calls from a compatible endpoint
+
+- **Contain:** fragments are assembled and validated whole (JSON, name, schema) after the stream
+  finishes; invalid calls never execute; endpoints without reliable tool calling are
+  `chat_only`; prose is never parsed as commands ([compatible endpoints](specs/compatible-endpoints.md#request-and-stream-handling)).
+
+### 39. Endpoint capability drift (config change, server upgrade, model swap)
+
+- **Detect:** the snapshot cache key includes the config revision and adapter version; probe
+  results are re-checked when error patterns change (context-length errors, schema errors).
+- **Contain:** a changed key invalidates the snapshot and requires a re-probe before the next
+  agent task.
+
+### 40. Provider-native state crosses a boundary
+
+- **Contain:** replay items are tagged `(provider, route, account, model)` and dropped on any
+  mismatch; switches happen at safe points with a fresh epoch
+  ([context compiler](specs/context-compiler.md#provider-and-route-switches)).
+
+### 41. Local-only work leaks to the cloud
+
+- **Contain:** `local_only` privacy class on endpoints, projects and learning data; reflection on
+  local-only packets runs only on local routes or waits; switching a local-only task to a cloud
+  route needs an explicit privacy-change confirmation; workspace config can force local-only.
+
+### 42. Wrong, stale or harmful learned procedure
+
+- **Detect:** prerequisites (dependency ranges, paths, symbols) checked at retrieval;
+  contradictions recorded deterministically or by retrospectives; followed-skill outcomes
+  tracked.
+- **Contain:** provisional skills are scoped narrowly and labelled; learned cards are advisory
+  and below user, repository and verification constraints; the gate is unchanged.
+- **Recover:** retire, roll back to an earlier version, or disable; past task evidence and pinned
+  snapshot hashes never change ([learning](specs/learning-service.md#skill-lifecycle)).
+
+### 43. Learning poisoning (web content, model claims, policy-weakening lessons)
+
+- **Contain:** the policy linter rejects lessons that skip or weaken checks, touch integrity
+  policy, permissions, objectives or runtime code; evidence refs must resolve to verified
+  outcomes or recorded failures; web-only provenance is clamped to repository scope; wider
+  scope needs repeated evidence or controlled evaluation.
+
+### 44. Duplicate or lost learning jobs across two stores
+
+- **Contain:** the outbox row commits with `ProjectFinalized`; job IDs are derived from
+  `(project, generation, kind)`; delivery is at-least-once with idempotent insert; leases
+  prevent two runtimes from running one job; a startup sweep repairs Markdown projections.
+
+### 45. Chrome missing, invalid, locked or crashing
+
+- **Contain:** typed `ChromeStatus`; research tools are not declared unless Chrome is ready;
+  coding continues; crashes fail only the current operation; repeated crashes mark Chrome
+  `unstable` for a cool-down; only Kai's own orphaned Chrome (matched by its profile path) is
+  ever terminated ([Chrome research](specs/chrome-research.md#browser-ownership-and-lifecycle)).
+
+### 46. Search-engine change, CAPTCHA or consent wall
+
+- **Detect:** semantic SERP parsing with versioned fixtures; typed outcomes
+  (`parse_failed` is never `no_results`; `captcha`, `consent_required`).
+- **Contain:** no automated bypass; engine cool-down after a CAPTCHA; a visible human handoff
+  pauses only the affected operation.
+- **Residual:** research is unavailable while the engine blocks; the model is told to proceed
+  and state what is unverified.
+
+### 47. Web prompt injection
+
+- **Contain:** web text is sanitized and wrapped as untrusted data; objectives are immutable;
+  permissions change only via KSP; research tools are read-oriented; web-derived lessons cannot
+  become global policy.
+- **Residual:** a page can still mislead the model's technical judgement; installed
+  declarations outrank web facts, and checks verify the result.
+
+### 48. Browser SSRF or data exfiltration to local or metadata addresses
+
+- **Contain:** a filtering proxy resolves and pins addresses, refusing private, loopback,
+  link-local and metadata ranges; QUIC and non-proxied WebRTC are disabled; non-HTTP(S) schemes
+  and downloads are blocked; local model endpoints are contacted by the runtime, never by the
+  browser. Query privacy rules keep repository code and secrets out of searches.
+- **Residual:** future browser transports that bypass the proxy; the smoke suite's loopback
+  canary detects regressions.
+
+### 49. Unsupported or stale web claims presented as current
+
+- **Contain:** snippets are never evidence; dates carry provenance; cached pages show their age
+  and never count as fresh; citations must resolve to delivered excerpts; time-sensitive notes
+  need two independent domains or are marked single-source.
+- **Residual:** Kai verifies that a cited passage exists and was read, not that it supports the
+  claim; the UI links each citation to its excerpt for human judgement.
+
+### 50. Endless review or cosmetic rework
+
+- **Contain:** blocking findings need a violated requirement or a reproduced or validated
+  defect; advisory findings never become repair items; duplicates are suppressed; optional
+  rounds are bounded per profile; `VERIFIED` ends work turns
+  ([harness profiles](specs/harness-profiles.md#review-and-stopping-policy)).
+- **Residual:** a real but unreproducible logic defect may be downgraded to advisory; it stays
+  in the report.
+
+---
+
+## Cross-feature failure behaviour
+
+Features fail independently wherever that is safe. Coding, editing and verification never depend
+on learning, research or a specific route being available.
+
+| Situation | Behaviour | Never |
+|---|---|---|
+| **Quota exhausted during reflection** | The retrospective job is `deferred {quota_exhausted}`; the evidence packet is kept; the project stays `finalized`; the UI shows "reflection pending"; the job re-queues when the route is ready again | Block project completion; switch to another route; fabricate a retrospective |
+| **Chrome fails during API research** (the model was researching a library change) | The research tool returns `browser_crashed` or `browser_unavailable`; the API Reality Checker's installed-declaration rungs still answer; the model continues and must state what is unverified | Treat the failure as "no results"; block the task; fall back to model memory as fact |
+| **Provider change during repair** | Applied at the next safe point; fingerprints, attempts and budgets carry over; replay items from the old route are dropped; a new epoch seed carries the evidence | Reset repair budgets; transplant reasoning items or continuation handles |
+| **Concurrent project finalization** (two workspaces, app and CLI runtimes) | Each finalization commits its own outbox job; global inserts are idempotent; leases give each job one runner; skill writes use optimistic concurrency | Duplicate jobs; lose a skill version; share a transaction across stores |
+| **App crash between verification and retrospective export** | The `TaskVerdict` is durable; if `ProjectFinalized` was committed, its outbox job is delivered after restart; if not, the project is still `active` and the user (or the idle rule) finalizes later; Markdown is re-rendered by the startup sweep | Re-run verification to "recover" the verdict; produce two retrospectives |
+| **Keychain unavailable** | OAuth routes `disabled {store_unavailable}`; API-key routes may use environment variables; local endpoints with `auth: none` work | Write secrets to a file |
+| **Learning store corrupted** | Learning disabled for the session with a visible error; tasks run without learned cards (snapshot hash recorded as `none`) | Block coding |
+| **Offline mode** | Research disabled; cloud routes refuse requests with `OFFLINE_MODE`; local endpoints work; learning reflection runs only on local routes | Browse, or call a cloud route |
+

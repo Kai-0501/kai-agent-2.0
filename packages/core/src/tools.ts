@@ -5,6 +5,7 @@
  * Spec: docs/specs/tool-surface.md · Decision: docs/adr/0012.
  */
 import type { ArtifactId, EpochId, SessionId, TaskId, TurnId } from "@kai/protocol";
+import type { ResearchToolArgs } from "./research.js";
 import type { TurnCounters } from "./telemetry.js";
 
 export type CoreToolName =
@@ -21,7 +22,11 @@ export type CoreToolName =
 
 export type PackId = "code_intel" | "api_reality" | "tests" | "vcs" | "research" | "multi_file_patch";
 
-/** Argument shapes of the core tools (Zod schemas generate the JSON Schema in the implementation). */
+/**
+ * Argument shapes of the core tools (Zod schemas generate the JSON Schema in the implementation).
+ * Profiles render these (descriptions, schema dialect, aliases); aliases resolve to these names
+ * before validation and authorization (docs/specs/harness-profiles.md#tool-rendering).
+ */
 export interface CoreToolArgs {
   read_file: { file_path: string; start_line?: number; end_line?: number; refresh?: boolean };
   read_symbol: { name: string; file_path?: string; include_references?: boolean };
@@ -39,12 +44,16 @@ export interface CoreToolArgs {
   write_file: { file_path: string; content: string; instruction?: string };
   run_shell_command: { command: string; description?: string; timeout_s?: number; background?: boolean };
   read_artifact: { artifact_id: string; query?: string; start_line?: number; end_line?: number };
+  /**
+   * No objective or acceptance fields: those are user-owned and change only via task.amend
+   * (docs/adr/0023). derived_criteria can only add checks.
+   */
   update_plan: {
-    objective?: string;
-    acceptance_criteria?: string[];
     plan?: { step: string; status: "todo" | "doing" | "done" | "dropped" }[];
+    derived_criteria?: string[];
+    clarification?: string;
     decisions?: { decision: string; rationale: string }[];
-    notes?: string[];
+    notes?: { text: string; sources?: string[]; time_sensitive?: boolean }[];
     scope?: { paths: string[]; symbols?: string[] };
     new_symbols?: string[];
     request_capabilities?: { pack: PackId; reason: string }[];
@@ -52,6 +61,9 @@ export interface CoreToolArgs {
   };
   complete_task: { summary: string; claims?: string[] };
 }
+
+/** Tool arguments of all capability packs that are typed in core. */
+export type PackToolArgs = ResearchToolArgs;
 
 export interface ToolContext {
   readonly sessionId: SessionId;

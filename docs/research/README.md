@@ -47,6 +47,8 @@ established from, in order of authority:
 | Google GenAI Python SDK | [googleapis/python-genai](https://github.com/googleapis/python-genai) | `618f0aa8` | 2026-10-02 | Apache-2.0 |
 | Gemini cookbook | [google-gemini/cookbook](https://github.com/google-gemini/cookbook) | `3f6cdf04` | 2026-10-01 | Apache-2.0 |
 
+The release extension adds Hermes Agent ([NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) @ `71574220`, 2026-10-05, MIT) and Playwright ([microsoft/playwright](https://github.com/microsoft/playwright) @ `66096ef7`, 2026-10-05, Apache-2.0), and rechecks OpenCode at the same commit; see [extension-2026-10.md](extension-2026-10.md#source-register).
+
 Gemini CLI, Codex and Serena were not on the required list. They were added because they turned
 out to hold the best available mechanism for specific Kai problems: Gemini-tuned tool shapes and
 Gemini-specific failure handling (Gemini CLI), patch grammar and command policy (Codex), and

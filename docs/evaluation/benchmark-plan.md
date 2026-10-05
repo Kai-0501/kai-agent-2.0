@@ -11,6 +11,13 @@
 2. **Correctness:** does Kai reduce invented symbols, non-compiling edits, test manipulation,
    regressions and premature completion claims?
 3. **Attribution:** which Kai mechanisms produce which effects (ablations)?
+4. **Profiles:** do the `openai` and `generic` profiles keep the shared protections' effects on
+   their models, and does the `openai` profile's stopping policy remove over-review without
+   letting real defects through? ([profile comparison](#profile-comparison))
+5. **Learning:** does shared learning lower **total resources per verified comparable project**,
+   overhead included, without lowering quality? ([learning evaluation](#learning-evaluation))
+6. **Research:** does Chrome research answer current-information gaps with valid citations at a
+   bounded cost, for all three profiles? ([research evaluation](#research-evaluation))
 
 ## Arms
 
@@ -19,7 +26,11 @@
 | **A0: mini-swe-agent + Gemini** | [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) (bash only, linear history) with `gemini-3.8-flash` through its LiteLLM path at default settings. This is the "raw Gemini with a minimal harness" baseline. |
 | **A1: Gemini CLI** | Google's own harness, headless mode, default config (thinking HIGH, its own compression). This is the "best available Gemini-native harness" baseline. |
 | **B: Kai (full)** | All mechanisms on, default thresholds. |
-| **B−x: Kai ablations** | `--no-ledger`, `--no-spooling`, `--firewall=off`, `--firewall=advisory`, `--governor=fixed:high`, `--epochs=off` (one chain up to the hard limit), `--tools=all`, `--critic=off`, `--critic=always`, `--repair-controller=off`, `stateMode=stateless`. |
+| **B−x: Kai ablations** | `--no-ledger`, `--no-spooling`, `--firewall=off`, `--firewall=advisory`, `--governor=fixed:high`, `--epochs=off` (one chain up to the hard limit), `--tools=all`, `--critic=off`, `--critic=always`, `--repair-controller=off`, `stateMode=stateless`, `--learning=off`, `--learning=reflect-only`, `--research=off`. |
+| **B-oa: Kai, `openai` profile** | Same corpus through `openai.api_key` (pinned model), and a subset through `openai.chatgpt_subscription` when a live account is available (reported separately; never mixed with API-key results). |
+| **B-gn: Kai, `generic` profile** | Same corpus through two compatible endpoints from the [contract matrix](../specs/compatible-endpoints.md#contract-test-matrix-live-gated-testcontractcompat): one hosted, one local 32k-context model. |
+| **O: OpenCode** | OpenCode headless (`opencode run`) at a pinned commit, with the same model and route as the Kai arm it is compared to (API-key or local endpoint; never its ChatGPT login route), default settings, the same container and caps. Feasibility is confirmed per route before a run; an arm that cannot run is reported as not run. |
+| **A1-oa: minimal harness + OpenAI** | mini-swe-agent with the same OpenAI model, as the "raw model" baseline for B-oa. |
 
 All arms: same model ID, same task prompts, same containers, same wall-clock and token caps, no
 human in the loop. Kai's and Gemini CLI's permission policies are set to auto-allow inside the
@@ -106,6 +117,78 @@ Each benchmark report contains:
 
 Reports are committed to `docs/evaluation/reports/YYYY-MM-DD-<name>.md`.
 
+## Profile comparison
+
+- **Pairs:** B-oa vs A1-oa and vs O (same model); B-gn vs O (same endpoint); each profile vs its
+  ablation `--profile=generic` on the same model (does the specialized profile earn its place?).
+- **Regression matrix:** the [harness-profiles regression matrix](../specs/harness-profiles.md#regression-matrix)
+  is computed per profile; a profile release is blocked if a "must not regress" cell regresses
+  beyond its margin.
+- **Over-review hypothesis (`openai` profile):** on the `review_bait` slice, measure
+  advisory-triggered rework turns (target 0), optional review rounds (≤ 1), and the share of
+  **seeded real defects** (security, integrity, concurrency) still caught (non-inferior to
+  `--openai-optional-review-rounds=2`). The hypothesis is rejected if seeded-defect recall drops
+  by more than 5 pp.
+- **Effort policy:** tokens per resolved task and repair attempts for the `openai` profile's
+  front-loaded planning (R8 high on architectural tasks) vs `fixed:medium`; the profile's choice
+  stays only if total tokens per resolved task drop at non-inferior resolve rate.
+- **Small context:** B-gn on the `small_context` slice must show zero over-limit requests and
+  resolve tasks sized for 32k.
+
+## Learning evaluation
+
+**Design.** Held-out **project families**: groups of 3–5 comparable projects (same repository
+with different features, or same stack across repositories), defined before any run
+([corpus](corpus.md#project-families-for-learning)). For each family, projects run in a fixed
+order:
+
+| Arm | Description |
+|---|---|
+| L0 learning off | `--learning=off` |
+| L1 learning on, cold | Empty learning store; the family's own earlier projects are the only source of skills |
+| L2 learning on, frozen | Skills learned on the *training* families only, store frozen (no writes) — tests transfer |
+
+Pinned for all arms: model ID and route, profile `id@version`, adapter versions, prompts,
+verification profiles, acceptance criteria (identical across arms), corpus commits, container
+images. Each family runs 3 times per arm with a fresh store per run (L1) or the frozen store (L2).
+
+**Primary metric:** total resources per **verified** project, summed over the family's later
+projects (2..n), **including** learning overhead (reflection calls, learned-card tokens) and all
+retries, critic, research and failed attempts; reported per usage field (input, cached, output,
+reasoning) with unknown fields counted as unknown, and in USD only for metered routes.
+
+**Predeclared quality bar** (a learning configuration fails if any holds):
+- verified completion is inferior to L0 (one-sided 95% CI below −2 pp);
+- introduced defects (hidden regression failures) or integrity violations increase (any
+  increase significant at 0.05, or point estimate above L0 + 1 per 20 projects);
+- any project's gate ran fewer required checks than L0's (must be 100% identical);
+- review obligations discharged by the user (approvals) increase.
+
+Savings that come with a quality-bar failure are rejected, not traded off.
+
+**Secondary:** learning overhead per project; break-even reuse count per skill (overhead ÷
+observed saving per reuse); retrieval precision (shown and followed ÷ shown); skills retired by
+contradiction; linter rejections by rule; tokens to first targeted test; searches before first
+edit; repeated failing commands.
+
+**Negative controls:** a seeded harmful skill ("skip the integration suite when unit tests
+pass") must be rejected by the linter in 100% of runs; a seeded stale `api_usage` skill (wrong
+major version) must never be retrieved after the lockfile changes.
+
+## Research evaluation
+
+- **Slice:** `research_needed` tasks whose correct solution depends on information not in the
+  repository or older model knowledge (a changed CLI flag, a deprecation, a recent release-note
+  behaviour), with hidden tests that fail with the outdated approach.
+- **Arms:** B (research on) vs `--research=off`, for each profile (gemini, openai, generic);
+  model-native search is not an arm (not a product dependency) but may be reported as context.
+- **Metrics:** resolve rate; citation validity (resolves to a delivered excerpt); share of final
+  claims about versions/flags with a valid citation; research tokens and wall time per task;
+  searches and page opens per task; budget exhaustion rate; parse-failure and block rates;
+  query-guard rejections.
+- **Offline determinism:** CI runs the slice against fixture SERPs and pages served locally; the
+  installed-Chrome smoke suite runs a small live subset on macOS and is reported separately.
+
 ## Calibration sweeps (Kai only)
 
 - `epochSoftLimit` ∈ {32k, 64k, 128k}
@@ -113,5 +196,8 @@ Reports are committed to `docs/evaluation/reports/YYYY-MM-DD-<name>.md`.
 - `readFile.outlineThresholdLines` ∈ {200, 300, 600}
 - Governor policy: rule table variants (e.g. R9 at `low` vs `medium`)
 - `readFile.lineNumbers` on vs off
+- `learning.retrieval.maxCards` ∈ {1, 3, 5}; `learning.retrieval.maxTokens` ∈ {300, 600, 1200}
+- research budgets (searches per task ∈ {5, 10, 20}; `web_open` output cap ∈ {800, 1200, 2000})
+- `generic` context sizing ratios on the 32k endpoint
 
 Choose defaults by tokens per resolved task subject to non-inferior resolve rate.

@@ -4,6 +4,9 @@
     { "path": "packages/protocol" },
     { "path": "packages/core" },
     { "path": "packages/provider-gemini" },
+    { "path": "packages/provider-openai" },
+    { "path": "packages/provider-compatible" },
+    { "path": "packages/research-chrome" },
     { "path": "packages/code-intel" }
   ]
 }

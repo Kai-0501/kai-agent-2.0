@@ -2,6 +2,7 @@
 
 - Package: `packages/core` (`governor/`, `risk/`)
 - Research: [gemini-api.md §6](../research/gemini-api.md#6-thinking-reasoning-effort) (Gemini CLI and OpenCode hard-code HIGH)
+- Amended by: [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md) (canonical effort scale, native mapping, models without control) and [harness profiles](harness-profiles.md#effort-policy) (per-profile modifiers)
 
 ## Responsibility
 
@@ -15,10 +16,20 @@ Verification Engine (T4 policy) and the Critic (triggers).
 **Not responsible for:** model routing between models in v1. A `model` override per phase is
 supported in config but not used by default.
 
+**Effort is an intent, not a universal enum.** The Governor outputs an `EffortIntent` on the
+canonical ordinal scale `none < minimal < low < medium < high < xhigh`. The active profile adds
+its rule **modifiers** (it may raise results and risk floors, never lower floors) and maps the
+intent to the model's **native** levels from the capability snapshot: nearest supported level,
+ties up for `replan`, `critic` and high-risk work, otherwise down. Both `requested` and
+`applied` are recorded; a model without a control records `applied: "uncontrolled"` and the
+profile may substitute a deliberation notice for escalations. The optimization target is
+**total work per verified task**, not the lowest effort per request.
+
 ## Interfaces
 
 ```ts
-type ReasoningEffort = "minimal" | "low" | "medium" | "high";
+type EffortLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";   // canonical ordinal scale
+type ReasoningEffort = EffortLevel;                                            // alias kept for founding text
 
 interface GovernorInput {
   purpose: RequestPurpose;         // what this request is for
@@ -28,7 +39,7 @@ interface GovernorInput {
   repair?: { failureFp: string; attemptsOnFp: number; totalAttempts: number; stuck: boolean };
   epochTurnIndex: number;          // 0 = seed request
 }
-type RequestPurpose = "work" | "replan" | "critic" | "decision_digest" | "probe";
+type RequestPurpose = "work" | "replan" | "critic" | "decision_digest" | "probe" | "reflection";
 type Phase = "explore" | "plan" | "implement" | "repair" | "verify";
 
 interface LastTurnSummary {
@@ -39,7 +50,12 @@ interface LastTurnSummary {
   progress: boolean;               // new evidence: an edit applied, a check passed, or a new file region read
 }
 
-interface GovernorDecision { effort: ReasoningEffort; rule: string; inputsDigest: string }
+interface GovernorDecision {
+  effort: EffortLevel;            // intent after rules, floor and profile modifiers
+  applied: EffortLevel | "uncontrolled";   // after native mapping (snapshot)
+  native?: string;                // the provider's level name actually sent
+  rule: string; inputsDigest: string;
+}
 
 interface ReasoningGovernor { decide(input: GovernorInput): GovernorDecision }
 
@@ -61,7 +77,7 @@ Rules are evaluated top to bottom, and the first match wins. The result is then 
 
 | # | Condition | Effort | Rationale |
 |---|---|---|---|
-| R1 | `purpose = decision_digest` or `probe` | `low` (`minimal` for probes) | Summarization and bookkeeping |
+| R1 | `purpose = decision_digest`, `probe` or `reflection` | `low` (`minimal` for probes; `reflection` may be `medium` for projects with ≥ 1 replan) | Summarization and bookkeeping |
 | R2 | `purpose = replan` | `high` | Fresh approach after being stuck |
 | R3 | `purpose = critic` | `high` if risk is high, else `medium` | Review quality matters, and it is selective |
 | R4 | `repair.stuck = true` or `attemptsOnFp ≥ 2` | `high` | Observed difficulty |
@@ -85,6 +101,13 @@ result. It never goes below the risk floor, and never below `low` unless the tas
 **trivial**: risk score under 10, a single file in scope, and an objective matching mechanical
 patterns such as rename, typo, comment or format. Gemini's own docs describe `minimal` as
 "roughly equivalent to off", so it is reserved for cases where reasoning has nothing to add.
+**`none`** is used under the same conditions only for models whose snapshot lists it, and
+**`xhigh`** only where a profile modifier allows it (for example the `openai` profile's
+benchmark-gated replan option).
+
+**Hysteresis (cache safety).** When the snapshot does not mark effort changes as cache-safe
+(`unknown` counts as unsafe), de-escalation waits until the rule result has been lower for two
+consecutive turns; escalation is immediate.
 
 ## Risk Assessor defaults
 
@@ -108,7 +131,7 @@ Score contributions (capped at 100). `level`: under 25 low, 25–59 medium, 60 a
 
 ## Events and telemetry
 
-`ReasoningDecision {turnId, effort, rule, inputsDigest}` for every request.
+`ReasoningDecision {turnId, effort, applied, native?, rule, inputsDigest}` for every request.
 
 Telemetry per (rule, effort): count, mean thought tokens, mean output tokens, and outcome of the
 following turn (progress, rejection, verification failure). This lets the policy be tuned from
@@ -116,14 +139,19 @@ data: if R10 turns at `low` show high subsequent rejection rates, raise it.
 
 ## Ablations
 
-- `--governor=fixed:high` (the Gemini CLI and OpenCode baseline), `fixed:medium`, `fixed:low`.
+- `--governor=fixed:high` (the Gemini CLI and OpenCode baseline), `fixed:medium`, `fixed:low`,
+  for every profile (the fixed level is mapped to native levels like any intent).
 - The success metric is **thought tokens per resolved task** at non-inferior resolve rate
   ([ADR-0014](../adr/0014-measurement-gated-mechanisms.md)).
 
 ## Acceptance tests
 
 1. A table-driven test over every rule. Each case gives the expected effort and rule ID.
-2. A clamping test: an unsupported `minimal` maps to `low`.
+2. A clamping test: an unsupported `minimal` maps to `low`; on a model with `[low, medium, high,
+   xhigh]` an intent of `high` for `replan` maps to `high`; on a model without control the
+   decision records `uncontrolled`.
+5. Hysteresis: with cache-unsafe effort changes, a sequence (high, low, low) applies high, high,
+   low.
 3. A risk test over fixture diffs (auth change, migration, dependency add) gives the expected
    levels.
 4. De-escalation: a scripted turn sequence (fail, fail, success) gives medium → high → medium.

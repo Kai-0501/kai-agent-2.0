@@ -51,7 +51,34 @@ export interface MatchResult {
   readonly candidates?: readonly { readonly range: LineRange; readonly text: string; readonly similarity: number }[];
 }
 
-export type RejectReason = "not_found" | "ambiguous" | "stale_view" | "firewall" | "external_change" | "noop" | "invalid_path";
+export type RejectReason =
+  | "not_found"
+  | "ambiguous"
+  | "stale_view"
+  | "firewall"
+  | "external_change"
+  | "noop"
+  | "invalid_path"
+  | "instructions_pending"; // unseen nested instructions: withheld once, model reconsiders (docs/adr/0023)
+
+/** Durable intent committed (TransactionPrepared) before the first rename (docs/specs/patch-engine.md#commit-protocol). */
+export interface PreparedManifest {
+  readonly txnId: TransactionId;
+  readonly files: readonly {
+    readonly path: string;
+    readonly op: "write" | "create" | "delete" | "rename_from" | "rename_to";
+    readonly beforeHash: ContentHash | null;
+    readonly afterHash: ContentHash | null;
+    readonly beforeBlob: ContentHash | null;
+    readonly afterBlob: ContentHash | null;
+    readonly tempPath?: string;
+    readonly mode: number;
+  }[];
+  readonly order: readonly string[];
+}
+
+/** Restart recovery of a prepared transaction without an outcome (docs/specs/patch-engine.md#crash-recovery). */
+export type RecoveryOutcome = "completed" | "rolled_back" | "abandoned" | "conflict";
 
 export interface TransactionResult {
   readonly txnId: TransactionId;
@@ -68,4 +95,6 @@ export interface PatchEngine {
   apply(txn: ProposedTransaction, signal: AbortSignal): Promise<TransactionResult>;
   /** Apply the stored reverse patch if files still match afterHash; else 3-way merge or refuse. */
   rollback(txnId: TransactionId): Promise<{ readonly ok: boolean; readonly conflicts?: readonly string[] }>;
+  /** Startup: resolve every TransactionPrepared without TransactionApplied/RolledBack from its manifest. */
+  recover(signal: AbortSignal): Promise<readonly { readonly txnId: TransactionId; readonly outcome: RecoveryOutcome; readonly paths: readonly string[] }[]>;
 }

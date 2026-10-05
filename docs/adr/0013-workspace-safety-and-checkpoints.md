@@ -3,6 +3,7 @@
 - Status: Proposed
 - Date: 2026-10-05
 - Related: [specs/patch-engine.md](../specs/patch-engine.md), [failure-modes.md](../failure-modes.md), [research/upstream/cline.md](../research/upstream/cline.md), [research/upstream/t3code.md](../research/upstream/t3code.md), [research/upstream/codex-and-serena.md](../research/upstream/codex-and-serena.md)
+- Partially superseded by: [ADR-0023](0023-audit-corrections.md) (crash recovery of multi-file transactions uses the durable prepared manifest)
 
 ## Context / problem
 

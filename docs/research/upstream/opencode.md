@@ -102,3 +102,17 @@ Only post-edit LSP diagnostics. There is no verification state machine and no co
 - **Effect** (as with T3 Code, see [ADR-0001](../../adr/0001-implementation-language-runtime.md)).
 - **About 25 LSP servers in v1.** Kai v1 supports TypeScript/JavaScript and Python properly,
   with a registry designed for more.
+
+## Release-extension recheck (2026-10-05)
+
+Rechecked at the same commit for the release extension
+([extension research §6](../extension-2026-10.md#6-opencode-baseline-r19r20)): OpenCode supports
+custom OpenAI-compatible providers (`@ai-sdk/openai-compatible`, `baseURL`, per-model limits),
+`SKILL.md` skills discovered from several directories and loaded on demand by a `skill` tool, and
+a ChatGPT Plus/Pro login. That login reuses the Codex CLI's OAuth client ID and calls
+`chatgpt.com/backend-api/codex/responses`
+([`plugin/openai/codex.ts` L10–L13](https://github.com/anomalyco/opencode/blob/907b3bc518fa48e90e8ec24dd327d13eee71c36c/packages/opencode/src/plugin/openai/codex.ts#L10-L13)).
+Kai does not copy that route; it uses the documented open-source Sign in with ChatGPT flow
+([ADR-0017](../../adr/0017-sign-in-with-chatgpt-route.md)). Custom endpoints and skills are
+table stakes; Kai's differentiation claims are listed, as falsifiable and not yet demonstrated,
+in [harness-profiles](../../specs/harness-profiles.md#comparison-with-opencode).

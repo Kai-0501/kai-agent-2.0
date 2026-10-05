@@ -1,7 +1,7 @@
 # Spec: Event model and Session Store
 
 - Package: `packages/core` (`store/`, `events/`)
-- Decision: [ADR-0004](../adr/0004-durable-event-session-model.md)
+- Decision: [ADR-0004](../adr/0004-durable-event-session-model.md); amended by [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md), [ADR-0020](../adr/0020-shared-procedural-learning.md), [ADR-0021](../adr/0021-chrome-research.md), [ADR-0023](../adr/0023-audit-corrections.md)
 
 ## Responsibility
 
@@ -14,6 +14,20 @@
 **Not responsible for:** deciding what the model sees (that is the
 [Context Compiler](context-compiler.md)), or business logic of subsystems (they *emit* events and
 *read* projections).
+
+## Stores
+
+| Store | Path ([configuration](configuration.md#locations-kai_home)) | Holds | Shares transactions with |
+|---|---|---|---|
+| **Workspace store** | `workspaces/<ws>/kai.db` | This spec: sessions, tasks, turns, tools, transactions, verification, research ops, project lifecycle, learning outbox | nothing else |
+| **Global learning store** | `learning/learning.db` | Learning events and projections ([learning](learning-service.md#persistence)) | nothing else |
+| **App store** | `app.db` | Accounts, capability snapshot and probe caches, discovery caches, config migrations | nothing else |
+
+Each store is an append-only log plus projections with its own `seq`. **No operation assumes a
+transaction across stores.** Cross-store effects go through the workspace store's
+`learning_outbox` with idempotent job IDs; snapshot caches in the app store are referenced from
+workspace events by content-derived IDs (`CapabilitySnapshotId`), and the snapshot itself is
+copied into the workspace event that first uses it, so replay never depends on a cache.
 
 ## Identifiers
 
@@ -32,6 +46,12 @@ All IDs are app-owned (T3 Code's rule). Provider IDs are stored as references.
 | `CheckpointId` | `chk_` + ULID; git ref `refs/kai/checkpoints/<ses>/<n>` | one workspace checkpoint |
 | `VerificationRunId` | `ver_` + ULID | one gate or tier run |
 | `ContentHash` | SHA-256 hex | file contents, blobs |
+| `ProjectId` | `prj_` + ULID | one project (above tasks) |
+| `SourceId` | `src_` + 8 base32 (shown to the model) | one research source per task and canonical URL |
+| `ResearchOpId` | `rop_` + ULID | one research tool call |
+
+Route, profile, endpoint, credential, account, skill and learning-job identifiers are listed in
+[configuration](configuration.md#stable-identifiers).
 
 ## Storage schema (SQLite, WAL)
 
@@ -71,10 +91,21 @@ CREATE TABLE verification_runs (run_id TEXT PRIMARY KEY, task_id TEXT, tier TEXT
 CREATE TABLE attempts (task_id TEXT, attempt_no INTEGER, failure_fp TEXT, approach_fp TEXT,
                        txn_ids_json TEXT, outcome TEXT, seq INTEGER);
 CREATE TABLE turn_usage (turn_id TEXT PRIMARY KEY, session_id TEXT, epoch_id TEXT, model TEXT,
-                         thinking_level TEXT, state_mode TEXT, input_tokens INTEGER,
-                         cached_tokens INTEGER, thought_tokens INTEGER, output_tokens INTEGER,
-                         tool_use_tokens INTEGER, total_tokens INTEGER, manifest_json TEXT,
-                         counters_json TEXT, latency_ms INTEGER, ttft_ms INTEGER, seq INTEGER);
+                         route_id TEXT, profile_id TEXT, usage_class TEXT, purpose TEXT,
+                         effort_requested TEXT, effort_applied TEXT, continuation TEXT,
+                         input_tokens INTEGER, cached_tokens INTEGER, reasoning_tokens INTEGER,
+                         output_tokens INTEGER, tool_use_tokens INTEGER, total_tokens INTEGER,
+                         -- NULL = not reported by the route (never 0 for unknown)
+                         manifest_json TEXT, counters_json TEXT, latency_ms INTEGER, ttft_ms INTEGER, seq INTEGER);
+CREATE TABLE projects (project_id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, state TEXT,
+                       generation INTEGER, outcome TEXT, created_seq INTEGER, updated_seq INTEGER);
+CREATE TABLE learning_outbox (job_id TEXT PRIMARY KEY, project_id TEXT, generation INTEGER, kind TEXT,
+                              packet_blob TEXT, queued_seq INTEGER, delivered_seq INTEGER);
+CREATE TABLE review_obligations (obligation_id TEXT PRIMARY KEY, task_id TEXT, kind TEXT, source TEXT,
+                                 status TEXT, resolved_by TEXT, seq INTEGER);
+CREATE TABLE research_sources (source_id TEXT PRIMARY KEY, task_id TEXT, canonical_url TEXT, status TEXT,
+                               artifact_id TEXT, content_hash TEXT, record_json TEXT, seq INTEGER);
+CREATE TABLE prepared_transactions (txn_id TEXT PRIMARY KEY, manifest_blob TEXT, state TEXT, seq INTEGER);
 ```
 
 The index tables (`files`, `symbols`, `refs`, `imports`) live in the same DB but are **derived
@@ -93,21 +124,30 @@ additional optional fields).
 - `SessionStarted {workspaceId, model, config, runtimeVersion, providerCapabilities}`
 - `SessionEnded {reason}`
 - `UserMessage {taskId?, text, attachments?}` / `SteeringMessage {taskId, text}`
-- `TaskCreated {taskId, objective, acceptance[], scopeHints[]}`
+- `TaskCreated {taskId, projectId, objective, acceptance[], scopeHints[], owner: "user"}`
+- `TaskAmended {taskId, objective?, acceptance?, by: "user"}` (the only way user criteria change; [ADR-0023](../adr/0023-audit-corrections.md))
+- `DerivedCriteriaRecorded {taskId, criteria[]}` (model-proposed via `update_plan`; additive only)
 - `TaskStateChanged {taskId, from, to, reason, evidenceRef?}`
 
 **Context**
-- `EpochStarted {epochId, reason: "task_start"|"soft_limit"|"hard_limit"|"phase"|"replan"|"resume"|"model_switch", previousEpochId?}`
+- `EpochStarted {epochId, reason: "task_start"|"soft_limit"|"hard_limit"|"phase"|"replan"|"resume"|"model_switch", previousEpochId?, continuation: "provider_chain"|"local_replay"}`
 - `EpochBriefBuilt {epochId, briefBlob, sections: {name, estTokens}[], llmDigestUsed: boolean}`
 - `ToolLoadoutChanged {epochId, declarationsHash, tools[], packs[]}`
 - `PromptVersioned {systemPromptHash, projectInstructionsHash, blobRefs}`
-- `ContextElided {epochId, turnRange, estTokensFreed}` (stateless mode only)
+- `ContextElided {epochId, turnRange, estTokensFreed}` (local replay mode only)
+- `RequestPreflighted {turnId, estimatedRequestTokens, limit, actions[]}`
+- `InstructionsWithheldMutation {turnId, dir, files[], instructionsBlob}`
+- `LearningSnapshotPinned {taskId, snapshotHash, skillVersions[]}` / `LearnedProceduresSelected {epochId, skillVersions[], estTokens}`
 
 **Model**
-- `ModelRequest {turnId, epochId, provider, model, stateMode, previousInteractionRef?, thinkingLevel, allowedTools?, inputManifest, inputBlob, declarationsHash, generationConfig}`
-- `ModelResponse {turnId, status, steps: CanonicalStep[], providerRefs: {interactionId?}, usage, latencyMs, ttftMs}`
+- `ModelRequest {turnId, epochId, provider, adapterVersion, routeId, accountScope?, profile: "<id>@<version>", model, continuation, previousRef?, purpose, effort: {requested, applied}, allowedTools?, inputManifest, inputBlob, promptHash, declarationsHash, capabilitySnapshotId, learningSnapshotHash?, generationConfig}`
+  (`generationConfig` is the exact allowlisted body minus `input`; enough to reproduce the request)
+- `ModelResponse {turnId, status, steps: CanonicalStep[], providerRefs: {interactionId?, responseId?}, usage /* fields may be null */, replayItemsBlob?, latencyMs, ttftMs}`
+- `CapabilitySnapshotRecorded {snapshotId, snapshot}` (first use in this store; the snapshot is copied, not referenced)
+- `ProviderSwitched {taskId, fromRoute, toRoute, fromModel, toModel, reason, confirmedPrivacyChange?}`
+- `RouteStateChanged {routeId, from, to, reason}` (no secret material)
 - `ModelError {turnId, kind, retryable, attempt, message}`
-- `ReasoningDecision {turnId, level, inputs, rule}` (the Governor's audit trail)
+- `ReasoningDecision {turnId, effort, applied, native?, rule, inputsDigest}` (the Governor's audit trail; `applied` may be `uncontrolled`)
 
 **Tools**
 - `ToolCallRequested {toolCallId, providerCallId, name, args}`
@@ -118,10 +158,12 @@ additional optional fields).
 
 **Edits and workspace**
 - `TransactionProposed {txnId, turnId, edits: EditOp[]}`
+- `TransactionPrepared {txnId, manifestBlob}` (durable intent before the first rename; [patch engine](patch-engine.md#commit-protocol))
 - `FirewallEvaluated {txnId, verdict: "pass"|"reject"|"pass_with_warnings", findings[]}`
 - `TransactionApplied {txnId, files: {path, beforeHash, afterHash}[], reversePatchBlob}`
 - `TransactionRejected {txnId, reason, findings[]}`
 - `TransactionRolledBack {txnId, reason}`
+- `TransactionRecovered {txnId, outcome: "completed"|"rolled_back"|"abandoned"|"conflict", paths[]}` (restart recovery)
 - `CheckpointCreated {checkpointId, gitRef, reason}` / `CheckpointRestored {checkpointId, paths[]}`
 - `ExternalChangeDetected {paths[], detectedBy: "watcher"|"hash_check"}`
 
@@ -131,13 +173,27 @@ additional optional fields).
 - `VerificationRunCompleted {runId, tier, checkId, status, classification?, artifactId, fingerprints[]}`
 - `TaskVerdict {taskId, state, evidence: EvidenceBundle}`
 - `IntegrityFinding {taskId, txnId?, kind, severity, detail, justified?}`
+- `ReviewObligationOpened {obligationId, taskId, kind, source}` / `ReviewObligationResolved {obligationId, by: "critic"|"user", outcome}`
 
 **Repair and critic**
 - `FailureFingerprinted {taskId, fp, kind, sample}`
 - `RepairAttemptRecorded {taskId, attemptNo, failureFp, approachFp, outcome}`
 - `StuckDetected {taskId, rule, evidence}`
 - `ReplanStarted {taskId, briefBlob}`
-- `CriticRequested {taskId, triggers[]}` / `CriticCompleted {taskId, findings[], blocking: boolean, usage}`
+- `CriticRequested {taskId, triggers[], required: boolean}` / `CriticCompleted {taskId, findings[], dispositions[], blocking: boolean, usage}`
+
+**Projects and learning** ([learning](learning-service.md#events))
+- `ProjectCreated {projectId, title}` / `ProjectStateChanged {projectId, from, to}`
+- `ProjectFinalized {projectId, generation, trigger, outcome, packetBlob}` + `LearningJobQueued {jobId, kind}` (same transaction)
+- `LearningJobDelivered {jobId}` / `SkillFollowedObserved {taskId, skillVersion, signal}` / `UserFeedbackRecorded {projectId?, taskId?, text}`
+
+**Research** ([Chrome research](chrome-research.md#events))
+- `ResearchOpStarted {opId, taskId, tool, query?, url?}` / `ResearchOpCompleted {opId, outcome, sourceIds[], ms, estTokens}`
+- `SourceRecorded {source}` / `CitationValidated {sourceId, range, ok}` / `ResearchBudgetExhausted {taskId, budget}`
+- `ChromeStateChanged {from, to}` / `HumanHandoffRequested {opId, kind}` / `HumanHandoffResolved {opId, result}`
+
+**Routes and credentials** ([credentials](credentials.md#events))
+- `RouteConfigured`, `RouteStateChanged`, `CredentialRotated {credentialRef, version}`, `AuthAttemptStarted {attemptId}`, `AuthAttemptFinished {attemptId, result}`
 
 ## Invariants (tested)
 
@@ -150,14 +206,23 @@ additional optional fields).
 5. Every `ModelRequest` can be reproduced from `inputBlob` + `declarationsHash` +
    `generationConfig`.
 6. Blobs are written before the events that refer to them.
+7. **No secret material in any event or blob** (API keys, OAuth tokens, codes, PKCE verifiers,
+   state, nonce, browser cookies). Tested by a property test that registers random secrets and
+   scans the store after scripted sessions.
+8. Every `replay_native` item is stored with its `(provider, routeId, accountScope, model)` tag.
+9. Every `ProjectFinalized` has exactly one `LearningJobQueued` per job kind in the same
+   transaction.
 
 ## Recovery
 
 On startup with a session that has no `SessionEnded`: close any dangling tool calls (invariant
-4), check workspace hashes against the last `TransactionApplied` per file, emit
-`ExternalChangeDetected` on mismatch, and mark the active task `blocked` with a recovery
-summary until the user resumes. A chained provider state is treated as lost: resume starts a new
-epoch.
+4), **recover prepared transactions** from their manifests ([patch engine](patch-engine.md#crash-recovery)),
+check workspace hashes against the last `TransactionApplied` per file, emit
+`ExternalChangeDetected` on mismatch, close dangling research operations as `browser_crashed`,
+and mark the active task `blocked {recovery}` with a recovery summary until the user resumes. A
+provider-side chain is treated as lost: resume starts a new epoch (local replay epochs could
+continue, but resume always starts a fresh epoch for simplicity and auditability). Undelivered
+`learning_outbox` rows are delivered after recovery.
 
 ## Acceptance tests
 

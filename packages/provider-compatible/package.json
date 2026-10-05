@@ -1,0 +1,15 @@
+{
+  "name": "@kai/provider-compatible",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SCAFFOLD (types only): see docs/specs. Not an implementation.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "dependencies": { "@kai/core": "workspace:*", "@kai/protocol": "workspace:*" }
+}

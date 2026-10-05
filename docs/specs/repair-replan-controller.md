@@ -88,6 +88,20 @@ task goes to `blocked`, with a report.
 5. No previous model text or reasoning is carried over, only the evidence. This avoids
    anchoring on the failed hypothesis.
 
+## Profiles, routes and learning
+
+- **Escalation without effort control:** on models whose snapshot has no reasoning control, the
+  `generic` profile turns "escalate" into a deliberation notice and lowers
+  `maxAttemptsPerFailure` to 2, so a replan comes sooner ([harness profiles](harness-profiles.md#effort-policy)).
+- **Provider change during repair:** a route or model switch while a failure fingerprint is open
+  keeps the fingerprints, attempts and budgets (they are durable state); the new epoch's brief
+  lists the attempted approaches; attempt counts are not reset by switching.
+- **Learned dead ends:** `repair_deadend` skills retrieved for the task appear as advisory lines
+  in the replan brief ("previously failed in this repository: …"). They never count as attempts
+  and never block an approach; only this task's own fingerprints drive D1–D8.
+- **Unavailable route mid-repair:** a quota or re-auth stop pauses the task (`blocked {route}`);
+  the repair state is unchanged on resume.
+
 ## Budgets (defaults)
 
 | Budget | Default |
@@ -117,3 +131,5 @@ within the replan epoch), tokens spent in repair vs total, and time-to-green.
 3. A legitimately converging sequence (5 → 3 → 1 → 0 failures) → no stuck detection.
 4. Budget exhausted after 2 replans → `blocked`, with a report containing the remaining
    failures.
+5. A switch from `openai.chatgpt_subscription` to `compat:local` after two attempts on fp X keeps
+   `attemptsOnFp = 2`; the third failing attempt on the new route triggers the same D3/D6 rules.

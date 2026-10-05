@@ -1,7 +1,7 @@
 # Spec: Verification Engine
 
 - Package: `packages/core` (`verify/`)
-- Decision: [ADR-0009](../adr/0009-verification-architecture.md)
+- Decision: [ADR-0009](../adr/0009-verification-architecture.md); amended by [ADR-0023](../adr/0023-audit-corrections.md) (user-owned criteria, baseline-backed flakiness, review obligations)
 - Collaborators: [Artifact Store](artifact-store.md), [Test Integrity Guard](test-integrity-guard.md), [Critic](critic.md), [Repair/Replan Controller](repair-replan-controller.md), Checkpoint Manager
 
 ## Responsibility
@@ -15,6 +15,12 @@
 **Not responsible for:** fixing failures (the model does, steered by the Repair Controller), or
 pre-write validation (the Firewall does T0/T1 inline).
 
+**Authority.** The task's objective and acceptance criteria are **user-owned**
+(`TaskCreated`, changed only by the user's `task.amend`). Model plans may add *derived* criteria
+(extra checks), never remove or narrow user criteria, and never change which profile checks are
+required. Learned skills, harness profiles and critic output cannot authorize a weaker check.
+Only this engine produces `verified`, for every route and profile.
+
 ## Task state machine
 
 ```mermaid
@@ -23,12 +29,12 @@ stateDiagram-v2
   open --> in_progress: first model turn
   in_progress --> implemented_unverified: complete_task
   implemented_unverified --> verifying: gate starts
-  verifying --> verified: all required checks pass, guard ok, critic ok/not required
+  verifying --> verified: all required checks pass, guard ok, no open review obligation, critic ok/not required
   verifying --> verification_failed: introduced failures / blocking findings
   verification_failed --> in_progress: repair budget remains (Repair Controller)
   verification_failed --> [*]: budget exhausted → final state verification_failed
-  implemented_unverified --> [*]: no runnable checks / verification disabled → final state implemented_unverified
-  in_progress --> blocked: stuck after replan / needs user / external change conflict
+  implemented_unverified --> [*]: no runnable checks / verification disabled / open review obligation without approval → final state implemented_unverified
+  in_progress --> blocked: stuck after replan / needs user / external change conflict / route unavailable (quota, re-auth) / context exhausted
   blocked --> in_progress: user resumes
   in_progress --> cancelled: user cancels
   verified --> [*]
@@ -96,10 +102,14 @@ complete_task(summary, claims)
  5. classify failures (lazy baseline, below)
  6. diff hygiene: no leftover debug prints added (console.log/print in non-test code, per heuristics),
     no stray files (scratch files, *.orig, .kai-tmp-*), no conflict markers, no .only/.skip added (guard)
- 7. Test Integrity Guard review of the whole task diff
+ 7. Test Integrity Guard review of the whole task diff; high-severity or needs_review findings
+    open REVIEW OBLIGATIONS (see critic.md#review-obligations)
  8. unfulfilled promissory symbols? → fail
- 9. Critic if triggers fire (after 1–8 pass)
-10. verdict → TaskVerdict event + evidence bundle
+ 9. Critic: required (open obligations) first, then optional risk triggers (after 1–8 pass)
+10. open obligation not discharged (critic validated review or user approval)?
+    → no `verified`; final `implemented_unverified` with the obligation and a pending
+      permission.request(kind="integrity")
+11. verdict → TaskVerdict event + evidence bundle
 ```
 
 The result to the model:
@@ -119,13 +129,23 @@ For each failing check at the gate:
    (`git worktree add --detach <tmp> <checkpoint-commit>`), with a shared `node_modules` or venv
    via symlink when safe or the profile's `baselineSetup` command, run the same check, and parse
    and cache the result.
-4. Classify: **introduced** (fails now, passed at baseline), **pre-existing** (fails in both),
-   **flaky** (rerun up to 2× now; passes on a rerun).
-5. Only *introduced* failures block. Flaky ones are reported, and the profile can mark tests as
-   known-flaky.
+4. Classify:
+   - **introduced**: fails now, passed at baseline;
+   - **pre-existing**: fails in both;
+   - **intermittent now:** rerun the failing check up to `verify.flakyReruns` (2) times. If a
+     rerun passes, the failure is intermittent *now*. It is classified **flaky** only if
+     (a) the profile's user-owned `knownFlaky` list names it, or (b) the same check is
+     intermittent **at baseline**: run it on the baseline worktree up to
+     `verify.baselineFlakyRuns` (3) times and it fails at least once. Otherwise it is
+     **introduced_intermittent**: the change made a stable check unstable (for example a new
+     race).
+5. *Introduced* and *introduced_intermittent* failures block. *Flaky* and *pre-existing* ones
+   are reported. A passing rerun **never** turns a newly introduced intermittent failure into an
+   accepted flaky baseline. Only the user can add entries to `knownFlaky`; a model edit to it is
+   an integrity finding (I13).
 
-If baseline execution is impossible (setup fails), failures are treated as *introduced*,
-conservatively, and the report says so.
+If baseline execution is impossible (setup fails), failures, including intermittent ones, are
+treated as *introduced*, conservatively, and the report says so.
 
 ## Evidence bundle
 
@@ -134,11 +154,13 @@ interface EvidenceBundle {
   taskId: TaskId;
   finalState: TaskState;
   checks: { id: string; tier: string; status: "pass" | "fail" | "skipped" | "error";
-            classification?: "introduced" | "pre_existing" | "flaky"; artifactId?: ArtifactId;
+            classification?: "introduced" | "introduced_intermittent" | "pre_existing" | "flaky"; artifactId?: ArtifactId;
             summary: string }[];
   diffStat: { files: number; insertions: number; deletions: number };
   integrity: IntegrityFinding[];
   critic?: { ran: boolean; triggers: string[]; findings: CriticFinding[] };
+  reviewObligations: { id: string; kind: string; status: "open" | "discharged_critic" | "discharged_user" }[];
+  acceptance: { user: string[]; derived: string[] };   // what was verified against
   unverifiedReasons?: string[];        // e.g. "no test command configured"
 }
 ```
@@ -155,8 +177,15 @@ gate), `final_state`.
    as `verified`, with the pre-existing failure listed.
 2. An introduced type error caught at T2 → `verification_failed` with the exact diagnostic.
 3. No profile, headless → `implemented_unverified` with reasons.
-4. Flaky test (fails 50% of the time) → classified as flaky after reruns. It does not block, and
-   it is reported.
+4. Flaky test (fails 50% of the time **at baseline and now**) → classified as flaky after
+   reruns. It does not block, and it is reported.
+4b. **Introduced intermittent failure:** a test that passes 3/3 at baseline and fails 1 in 2 runs
+   after the change (a fixture race) → `introduced_intermittent`; the gate fails even though a
+   rerun passed.
 5. `.only` added → the gate fails through the integrity guard.
 6. State machine property: there is no path to `verified` without a `VerificationRunCompleted`
-   for every required check.
+   for every required check, and none with an open review obligation.
+7. A model `update_plan` that tries to drop a user acceptance criterion is rejected by schema
+   (no such field); derived criteria appear in the evidence bundle labelled as model-proposed.
+8. Profile and route independence: the same fixture task through the fake `gemini`, `openai` and
+   `generic` profiles runs the identical set of required checks at the gate.

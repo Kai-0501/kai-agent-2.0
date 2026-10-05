@@ -30,7 +30,10 @@ export interface IntegrityFindingRecord {
   readonly path: string;
   readonly detail: string;
   readonly txnId?: TransactionId;
+  /** requirementRef must point to user-owned criteria; model-derived criteria cannot justify weakening. */
   readonly justification?: { readonly by: "model" | "user"; readonly reason: string; readonly requirementRef?: string; readonly status: "valid" | "needs_review" | "invalid" };
+  /** High severity (I6, I11, I13) or needs_review opens a review obligation (docs/specs/critic.md#review-obligations). */
+  readonly obligationId?: string;
 }
 
 export interface TestIntegrityGuard {

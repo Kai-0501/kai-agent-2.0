@@ -1,7 +1,7 @@
 # Spec: Editing / Patch Engine
 
 - Package: `packages/core` (`patch/`)
-- Decision: [ADR-0007](../adr/0007-editing-protocol.md), [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md)
+- Decision: [ADR-0007](../adr/0007-editing-protocol.md), [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md); durable commit and recovery: [ADR-0023](../adr/0023-audit-corrections.md)
 - Collaborators: [Hallucination Firewall](hallucination-firewall.md), [Read Ledger](read-ledger.md), [Repo Index](repo-index.md), Checkpoint Manager
 
 ## Responsibility
@@ -22,8 +22,11 @@ model response with N edit calls
               └─► any match failure → reject whole txn          → TransactionRejected (no disk change)
         └─► Firewall.evaluate(overlay, baseline)                → FirewallEvaluated
               └─► verdict reject → discard overlay              → TransactionRejected
+        └─► Instruction check: unseen nested instructions for a target dir?
+              └─► yes → withhold (NOT APPLIED, instructions as notice) → InstructionsWithheldMutation
         └─► Checkpoint (if the policy says so)                  → CheckpointCreated
-        └─► Commit: hash-check every target vs last known, write temp + rename
+        └─► Prepare: before/after blobs + temp files + manifest → TransactionPrepared (durable)
+        └─► Commit: hash-check every target vs last known, rename temp → target
               └─► mid-commit failure → restore written files    → TransactionRolledBack
         └─► Post-commit: update index, ledger (edit_echo), LSP sync, optional formatter
                                                                 → TransactionApplied
@@ -113,12 +116,49 @@ transaction):
 2. If the policy requires (always, the first time each file is written in a task; and before
    every transaction batch by default), create a **workspace checkpoint** (git ref, private
    index; [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md)).
-3. Write each file to `<dir>/.<name>.kai-tmp-<rand>`, `fsync`, then `rename` over the target.
-   Preserve file mode.
-4. If any write fails, restore every already-renamed file from its before-blob, emit
-   `TransactionRolledBack`, and report all calls as not applied.
-5. Store the **reverse patch** (a unified diff from after to before) as a blob in
+3. **Prepare (durable intent).** Store every file's before bytes and after bytes as blobs. Write
+   each new content to `<dir>/.<name>.kai-tmp-<txnId>-<n>` and `fsync` it (and its directory).
+   Write the **prepared manifest** blob and commit `TransactionPrepared {txnId, manifestBlob}`:
+
+   ```ts
+   interface PreparedManifest {
+     txnId: TransactionId;
+     files: {
+       path: string;                                   // workspace-relative
+       op: "write" | "create" | "delete" | "rename_from" | "rename_to";
+       beforeHash: ContentHash | null;                 // null = did not exist
+       afterHash: ContentHash | null;                  // null = deleted
+       beforeBlob: ContentHash | null; afterBlob: ContentHash | null;
+       tempPath?: string;                              // for write/create
+       mode: number;                                   // preserved file mode
+     }[];
+     order: string[];                                  // rename order (deterministic: path order)
+   }
+   ```
+4. **Commit.** Re-check every target hash (step 1) immediately before renaming; then `rename`
+   each temp file over its target in `order`, applying deletes and renames last; `fsync` the
+   directories.
+5. If any step fails while the process is alive, restore every already-renamed file from its
+   before-blob, remove remaining temp files, emit `TransactionRolledBack`, and report all calls
+   as not applied.
+6. Store the **reverse patch** (a unified diff from after to before) as a blob in
    `TransactionApplied`.
+
+## Crash recovery
+
+On startup, for every `TransactionPrepared` without `TransactionApplied` or
+`TransactionRolledBack`, read its manifest and hash each target:
+
+| Disk state of the targets | Action | Event |
+|---|---|---|
+| All equal `beforeHash` | Nothing was renamed: delete temp files | `TransactionRecovered {outcome: "abandoned"}` (calls reported as not applied in the recovery summary) |
+| All equal `afterHash` | Every rename happened: delete leftovers, record the reverse patch | `TransactionRecovered {outcome: "completed"}` then `TransactionApplied` |
+| Mixed `beforeHash` / `afterHash` only | Partial commit: restore files at `afterHash` from `beforeBlob` (default) | `TransactionRecovered {outcome: "rolled_back"}` |
+| Any file matches neither | External change during the crash window: change nothing, keep blobs and temp files, block the task with a conflict report listing each path's three hashes | `TransactionRecovered {outcome: "conflict"}` |
+
+Recovery never guesses: a path is changed only when its current hash equals a hash recorded in
+the manifest. Temp files not listed in any manifest but matching `.kai-tmp-*` are reported, not
+deleted.
 
 ## Post-commit
 
@@ -173,3 +213,10 @@ written.
 7. `seen_stale`: read a region, then an external edit changes a line adjacent to the edit
    target (within the ±3-line context), then replace on the unchanged target line → stale
    rejection that includes the current text.
+8. **Crash points** (kill -9 the process at each step of a 3-file transaction: after blobs, after
+   temp files, after `TransactionPrepared`, after each rename, before `TransactionApplied`):
+   on restart the workspace is either fully before or fully after, and the recovery event
+   matches the table; an external edit injected during the crash window yields `conflict` and no
+   file is changed.
+9. **Instructions withheld:** an edit under a directory with an unseen `AGENTS.md` is not
+   applied, no temp file or blob is written, and the resent edit applies.

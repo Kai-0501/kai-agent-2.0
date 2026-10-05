@@ -1,7 +1,7 @@
 # Spec: Gemini Provider
 
 - Package: `packages/provider-gemini`
-- Decisions: [ADR-0003](../adr/0003-gemini-provider-strategy.md), [ADR-0011](../adr/0011-provider-extensibility-boundary.md)
+- Decisions: [ADR-0003](../adr/0003-gemini-provider-strategy.md), [ADR-0011](../adr/0011-provider-extensibility-boundary.md), [ADR-0016](../adr/0016-providers-routes-profiles-capabilities.md) (route `gemini.api_key`, `gemini` profile, capability snapshot)
 - Research: [gemini-api.md](../research/gemini-api.md)
 
 ## Responsibility
@@ -13,6 +13,15 @@ usage including cached and thought tokens. **Discover and record** model capabil
 
 **Not responsible for:** context selection, tool execution, or deciding thinking levels. It
 *clamps* levels to supported values and never picks them.
+
+In the release architecture this provider is the adapter behind the `gemini.api_key` route; its
+model-facing behaviour (founding prompt, Gemini-CLI-shaped tools, governor table) is the
+[`gemini` harness profile](harness-profiles.md). Its `describe()` result is recorded as a
+`CapabilitySnapshot` (effort control `levels` mapped onto the canonical scale; usage fields all
+reported; `reasoningIncludedInOutput: false` because thought tokens are separate). Gemini
+built-in tools (`google_search`, `url_context`, `code_execution`) are **not** used for research,
+which goes through the shared [Chrome research service](chrome-research.md) for every profile
+([ADR-0021](../adr/0021-chrome-research.md)).
 
 ## Interfaces
 
@@ -55,9 +64,12 @@ type ProviderTurnEvent =
   | { type: "completed"; status: TurnStatus; usage: TurnUsage; continuation: StateHandle; rawRef?: ContentHash }
   | { type: "error"; kind: ProviderErrorKind; retryable: boolean; message: string };
 
-interface TurnUsage {               // reported, verbatim from Interactions `usage`
-  inputTokens: number; cachedTokens: number; thoughtTokens: number;
-  outputTokens: number; toolUseTokens: number; totalTokens: number;
+interface TurnUsage {               // reported, verbatim from Interactions `usage`; null if a field is absent
+  inputTokens: number | null; cachedTokens: number | null;
+  reasoningTokens: number | null;   // Interactions total_thought_tokens
+  outputTokens: number | null; toolUseTokens: number | null; totalTokens: number | null;
+  reasoningIncludedInOutput: false; // Gemini reports thought tokens separately
+  usageClass: "api_metered";
 }
 type TurnStatus = "completed" | "requires_action" | "incomplete" | "failed" | "cancelled" | "budget_exceeded";
 ```
@@ -68,10 +80,10 @@ type TurnStatus = "completed" | "requires_action" | "incomplete" | "failed" | "c
 |---|---|
 | `systemInstruction` | `system_instruction` |
 | `ToolDeclaration {name, description, parametersJsonSchema}` | `{type:"function", name, description, parameters}` |
-| `effort` (`minimal\|low\|medium\|high`) | `generation_config.thinking_level` after clamping to `caps.thinkingLevels` |
+| `effort` (canonical intent) | `generation_config.thinking_level` after mapping to `caps.thinkingLevels` (`none` → `minimal`, `xhigh` → `high` unless probed) |
 | `allowedTools` | `generation_config.tool_choice = {allowed_tools: {mode: "auto", tools}}` |
 | `maxOutputTokens` | `generation_config.max_output_tokens` |
-| `user_text`, `harness_notice` | `{type:"user_input", content:[{type:"text", text}]}` (notices keep their `<kai_notice>` wrapper) |
+| `user_text`, `harness_notice` | `{type:"user_input", content:[{type:"text", text}]}` (notices keep their `<kai_notice>` wrapper; Gemini has no developer role) |
 | `function_result {providerCallId, name, result, isError}` | `{type:"function_result", call_id, name, result, is_error}` |
 | (stateless) `model_text`, `function_call`, `opaque_reasoning` | the original `model_output`, `function_call` and `thought` steps, **verbatim** from the stored raw response |
 | `continuation.interactionId` (chained) | `previous_interaction_id` |

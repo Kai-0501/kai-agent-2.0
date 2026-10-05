@@ -32,7 +32,34 @@ importers:
 
   packages/protocol: {}
 
+  packages/provider-compatible:
+    dependencies:
+      '@kai/core':
+        specifier: workspace:*
+        version: link:../core
+      '@kai/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/provider-gemini:
+    dependencies:
+      '@kai/core':
+        specifier: workspace:*
+        version: link:../core
+      '@kai/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
+  packages/provider-openai:
+    dependencies:
+      '@kai/core':
+        specifier: workspace:*
+        version: link:../core
+      '@kai/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
+  packages/research-chrome:
     dependencies:
       '@kai/core':
         specifier: workspace:*
