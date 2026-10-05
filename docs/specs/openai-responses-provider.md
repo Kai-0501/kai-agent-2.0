@@ -57,7 +57,7 @@ without it; a second failure is a hard error.
 
 Every `function_call` replayed must be followed by its `function_call_output` with the same
 `call_id` before the next user or developer message; the Context Compiler's elision never
-separates them ([context-compiler](context-compiler.md#local-replay-mode)).
+separates them ([context-compiler](context-compiler.md#stateless-mode-differences-local-replay)).
 
 Replay items are tagged `{provider: "openai", routeId, accountScope, model}` and are dropped by
 the compiler when any tag differs from the request's.

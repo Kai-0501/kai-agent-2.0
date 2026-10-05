@@ -1,13 +1,14 @@
 # Spec: Editing / Patch Engine
 
 - Package: `packages/core` (`patch/`)
-- Decision: [ADR-0007](../adr/0007-editing-protocol.md), [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md); durable commit and recovery: [ADR-0016](../adr/0016-robustness-amendments.md)
-- Collaborators: [Hallucination Firewall](hallucination-firewall.md), [Read Ledger](read-ledger.md), [Repo Index](repo-index.md), Checkpoint Manager
+- Decisions: [ADR-0007](../adr/0007-editing-protocol.md), [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md), amended by [ADR-0016](../adr/0016-robustness-amendments.md)
+- Collaborators: [Hallucination Firewall](hallucination-firewall.md), [Read Ledger](read-ledger.md), [Repo Index](repo-index.md), [Context Compiler](context-compiler.md) (instruction map), [event model](event-model.md), Checkpoint Manager
 
 ## Responsibility
 
-Turn the model's edit calls into **validated, atomic, reversible transactions** against the
-version of the code the model actually saw.
+Turn the model's edit calls into **validated, crash-safe, all-or-nothing, reversible
+transactions** against the version of the code the model actually saw, and only after the
+model has seen the project instructions that apply to the files it is changing.
 
 **Not responsible for:** deciding *whether* an edit is semantically correct (the Firewall and the
 Verification Engine do that), or formatting code (an optional post-apply formatter hook runs only
@@ -17,21 +18,26 @@ when it is configured in the profile).
 
 ```
 model response with N edit calls
-  └─► TransactionBuilder: collect edits in call order          → TransactionProposed
+  └─► TransactionBuilder: collect edits in call order                  → TransactionProposed
+        └─► INSTRUCTION GATE: applicable instruction files delivered?  → (no) TransactionRejected(instructions_pending) + instruction text
         └─► for each edit: resolve path, load base (overlay or disk), MATCH, apply to overlay
-              └─► any match failure → reject whole txn          → TransactionRejected (no disk change)
-        └─► Firewall.evaluate(overlay, baseline)                → FirewallEvaluated
-              └─► verdict reject → discard overlay              → TransactionRejected
-        └─► Instruction check: unseen nested instructions for a target dir?
-              └─► yes → withhold (NOT APPLIED, instructions as notice) → InstructionsWithheldMutation
-        └─► Checkpoint (if the policy says so)                  → CheckpointCreated
-        └─► Prepare: before/after blobs + temp files + manifest → TransactionPrepared (durable)
-        └─► Commit: hash-check every target vs last known, rename temp → target
-              └─► mid-commit failure → restore written files    → TransactionRolledBack
-        └─► Post-commit: update index, ledger (edit_echo), LSP sync, optional formatter
-                                                                → TransactionApplied
+              └─► any match failure → reject whole txn                  → TransactionRejected (no disk change)
+        └─► ledger version check (match ± 3 lines)                      → (stale) TransactionRejected(stale_view)
+        └─► Firewall.evaluate(overlay, baseline)                        → FirewallEvaluated
+              └─► verdict reject → discard overlay                      → TransactionRejected
+        └─► Checkpoint (if the policy says so)                          → CheckpointCreated
+        └─► PREPARE: before/after blobs durable, journal record durable → TransactionPrepared
+        └─► STAGE: write + fsync temp files for every target
+        └─► VERIFY: re-hash targets == before hashes?                   → (no) TransactionAborted(external_change), temps removed
+        └─► SWAP: rename temps over targets / unlink deletes, fsync dirs
+        └─► COMMIT marker                                               → TransactionApplied
+        └─► Post-commit: index, ledger (edit_echo), LSP sync, optional formatter
         └─► Result per call: applied hunk / NOT APPLIED reason
 ```
+
+Nothing touches the worktree before **PREPARE** is durable. From PREPARE until the COMMIT marker
+(or an abort or rollback record), the transaction is **in flight**, and the
+[recovery procedure](#crash-recovery) can complete or undo it from the journal alone.
 
 ## Data structures
 
@@ -56,13 +62,52 @@ interface MatchResult {
   candidates?: { range: LineRange; text: string; similarity: number }[];  // on failure, ≤ 3
 }
 
+/** The write-ahead journal record. Everything needed to finish OR undo the transaction. */
+interface PreparedTransaction {
+  txnId: TransactionId;
+  checkpointId?: CheckpointId;
+  order: string[];                      // paths in the exact order SWAP will process them
+  files: {
+    path: string;
+    op: "create" | "modify" | "delete";          // a rename is a delete of `from` plus a create of `to`
+    beforeHash: ContentHash | null;              // null = did not exist
+    beforeBlob: ContentHash | null;              // full pre-image (null only for create)
+    afterHash: ContentHash | null;               // null = must not exist afterwards (delete)
+    afterBlob: ContentHash | null;               // full post-image (null only for delete)
+    mode: number;                                // POSIX mode bits to restore or apply
+    tempName: string;                            // ".<name>.kai-tmp-<txnId>-<n>" in the same directory
+  }[];
+  reversePatchBlob: ContentHash;
+}
+
 interface TransactionResult {
   txnId: TransactionId;
-  status: "applied" | "rejected" | "rolled_back";
+  status: "applied" | "rejected" | "aborted" | "rolled_back";
   perCall: { toolCallId: ToolCallId; message: string; hunk?: string; isError: boolean }[];
   firewall?: FirewallReport;
 }
 ```
+
+## Instruction gate
+
+Before any matching work, for every target path (and both sides of a rename):
+
+1. Look up the **applicable instruction files** in the instruction map: every `AGENTS.md`,
+   `KAI.md` and `GEMINI.md` in the path's directory or any ancestor up to the workspace root
+   ([context-compiler](context-compiler.md#project-instructions-instruction-map-and-pre-mutation-gate)).
+2. For each one, ask the Read Ledger whether it has been delivered **in the current epoch at its
+   current hash** (delivery kind `instructions`).
+3. If any are missing, **reject the whole transaction** with `instructions_pending`. The result
+   contains each missing instruction file's full text (recorded as a ledger delivery and counted
+   under `project_instructions`), followed by: *"These instructions apply to the files you are
+   editing and were not yet in your context. Nothing was written. Re-check your edit against them
+   and resend it (changed or unchanged)."*
+4. The resent transaction passes the gate, because the files are now delivered. The gate only
+   ever fires once per (instruction file, hash, epoch).
+
+The same gate guards `run_shell_command` when the policy classifies the command as mutating: the
+paths checked are the command's `cwd` and any workspace paths appearing in its argv. If
+instructions are pending, the command is **not run**, and the instructions are returned.
 
 ## Matching
 
@@ -101,64 +146,77 @@ transaction):
 
 ## Write ops
 
-- `write` on a non-existent path → create, with parent directories created. Path must be inside
-  the workspace and not ignored by policy (e.g. `.git/`, `.kai/` internals).
+- `write` on a non-existent path → create, with parent directories created (recorded in the
+  journal so rollback can remove directories Kai created). Path must be inside the workspace and
+  not ignored by policy (e.g. `.git/`, `.kai/` internals).
 - `write` on an existing file → full replace. If the file has more than 200 lines and the
   effective diff touches under 30% of its lines, the result includes the hint *"Most of this
   file was unchanged; prefer replace for targeted edits"* (counted as `wasteful_rewrite`). It is
   not blocked.
 
-## Commit protocol
+## Commit protocol (write-ahead journal)
 
-1. For each target path: read the current disk bytes and hash them. Compare with the expected
-   **pre-transaction hash** (the base the overlay was built from). On mismatch → reject the whole
-   transaction with `external_change`, and emit `ExternalChangeDetected`.
-2. If the policy requires (always, the first time each file is written in a task; and before
-   every transaction batch by default), create a **workspace checkpoint** (git ref, private
-   index; [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md)).
-3. **Prepare (durable intent).** Store every file's before bytes and after bytes as blobs. Write
-   each new content to `<dir>/.<name>.kai-tmp-<txnId>-<n>` and `fsync` it (and its directory).
-   Write the **prepared manifest** blob and commit `TransactionPrepared {txnId, manifestBlob}`:
+**Invariant J1:** no workspace file is created, modified or deleted by a transaction unless a
+durable `TransactionPrepared` record exists that holds **both** the full pre-image and the full
+post-image of **every** file in the transaction.
 
-   ```ts
-   interface PreparedManifest {
-     txnId: TransactionId;
-     files: {
-       path: string;                                   // workspace-relative
-       op: "write" | "create" | "delete" | "rename_from" | "rename_to";
-       beforeHash: ContentHash | null;                 // null = did not exist
-       afterHash: ContentHash | null;                  // null = deleted
-       beforeBlob: ContentHash | null; afterBlob: ContentHash | null;
-       tempPath?: string;                              // for write/create
-       mode: number;                                   // preserved file mode
-     }[];
-     order: string[];                                  // rename order (deterministic: path order)
-   }
-   ```
-4. **Commit.** Re-check every target hash (step 1) immediately before renaming; then `rename`
-   each temp file over its target in `order`, applying deletes and renames last; `fsync` the
-   directories.
-5. If any step fails while the process is alive, restore every already-renamed file from its
-   before-blob, remove remaining temp files, emit `TransactionRolledBack`, and report all calls
-   as not applied.
-6. Store the **reverse patch** (a unified diff from after to before) as a blob in
-   `TransactionApplied`.
+1. **Checkpoint.** If the policy requires it (always, the first time each file is written in a
+   task; by default before every transaction batch), create a workspace checkpoint (git ref,
+   private index; [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md)). This is a second
+   safety net, independent of the journal.
+2. **PREPARE.**
+   1. Write every before-blob and after-blob to the content-addressed blob store, `fsync` each
+      blob file, and `fsync` the blob directories.
+   2. Append the `TransactionPrepared` event, carrying the `PreparedTransaction` record, in a
+      SQLite transaction committed with **`PRAGMA synchronous = FULL`** for that commit. The rest
+      of the store may run at `NORMAL`, but the journal commit must survive power loss.
+3. **STAGE.** For each target with an after-image, write `tempName` in the target's directory
+   with the after-content and mode, then `fsync` it. No target has been touched yet.
+4. **VERIFY.** Re-hash every target and compare with `beforeHash` (absent ⇔ null). On any
+   mismatch (an external change since the overlay was built): delete all temps, append
+   `TransactionAborted {reason: "external_change", paths}`, emit `ExternalChangeDetected`, and
+   report every call as not applied. **Nothing was written.**
+5. **SWAP**, in `order`: `rename(temp, target)` for creates and modifies, `unlink(target)` for
+   deletes. Then `fsync` each affected directory (once per directory, after all its renames).
+6. **COMMIT.** Append `TransactionApplied {txnId}`. This is the commit marker, and its absence is
+   what recovery looks for.
+7. **Cleanup.** Remove any leftover temp files for this `txnId`.
+8. **In-process failure during SWAP** (an exception, not a crash): run the same procedure as
+   [recovery](#crash-recovery) for this transaction immediately. That is roll back, unless every
+   file is already in its after-state. Then report every call as not applied (or applied, if the
+   transaction rolled forward).
 
 ## Crash recovery
 
-On startup, for every `TransactionPrepared` without `TransactionApplied` or
-`TransactionRolledBack`, read its manifest and hash each target:
+Runs **at runtime start, before any other work on the workspace**, and on demand
+(`kai recover`). It is also used for in-process SWAP failures. It is deterministic and
+idempotent, and it reads only the journal and the disk.
 
-| Disk state of the targets | Action | Event |
+For each `TransactionPrepared` with no `TransactionApplied`, `TransactionAborted` or
+`TransactionRolledBack`:
+
+1. **Remove stray temp files** matching `.kai-tmp-<txnId>-*`.
+2. **Classify each file** by hashing the disk:
+   - `AFTER`: matches `afterHash` (or absent when `afterHash` is null);
+   - `BEFORE`: matches `beforeHash` (or absent when `beforeHash` is null);
+   - `FOREIGN`: anything else (someone or something changed it).
+   A file whose before and after are identical cannot occur (no-op files are excluded at
+   PREPARE).
+3. **Decide:**
+
+| Disk state | Action | Recorded as |
 |---|---|---|
-| All equal `beforeHash` | Nothing was renamed: delete temp files | `TransactionRecovered {outcome: "abandoned"}` (calls reported as not applied in the recovery summary) |
-| All equal `afterHash` | Every rename happened: delete leftovers, record the reverse patch | `TransactionRecovered {outcome: "completed"}` then `TransactionApplied` |
-| Mixed `beforeHash` / `afterHash` only | Partial commit: restore files at `afterHash` from `beforeBlob` (default) | `TransactionRecovered {outcome: "rolled_back"}` |
-| Any file matches neither | External change during the crash window: change nothing, keep blobs and temp files, block the task with a conflict report listing each path's three hashes | `TransactionRecovered {outcome: "conflict"}` |
+| Every file `AFTER` | **Roll forward**: the swap completed and only the commit marker is missing. The content passed the firewall before PREPARE | `TransactionApplied {recovered: true}` |
+| Every file `BEFORE` | Nothing was swapped. **Abort** | `TransactionAborted {reason: "crash_before_swap", recovered: true}` |
+| A mix of `AFTER` and `BEFORE`, no `FOREIGN` | **Roll back**: for each `AFTER` file, restore the before-image from `beforeBlob` (temp + rename + fsync; unlink for files that did not exist; remove directories Kai created if empty) | `TransactionRolledBack {reason: "crash_mid_swap", recovered: true}` |
+| Any `FOREIGN` | **Touch nothing.** The task becomes `blocked` (`recovery_conflict`), and the user chooses per file: keep disk / restore before / restore after (`recovery.resolve` in the [protocol](protocol.md)) | `RecoveryConflict {txnId, paths}` |
 
-Recovery never guesses: a path is changed only when its current hash equals a hash recorded in
-the manifest. Temp files not listed in any manifest but matching `.kai-tmp-*` are reported, not
-deleted.
+4. **Idempotence.** The rollback restore is itself just more renames toward known images. A crash
+   during rollback leaves files in `BEFORE` or `AFTER`, so running recovery again re-classifies
+   and finishes. No record other than the final one is needed.
+5. **After recovery**, the ledger marks the affected paths stale. The interrupted task resumes
+   only in a **new epoch**, whose brief states the outcome (*"txn_… was rolled back after an
+   interrupted write; files X, Y are back to their pre-edit state"*).
 
 ## Post-commit
 
@@ -168,7 +226,8 @@ deleted.
 - Sync LSP documents to the new disk content.
 - If configured, run the formatter on the changed files. Any additional diff it makes is shown to
   the model in the result (`formatted: +2/−2 lines`), and the ledger marks those regions as
-  `formatter`-changed.
+  `formatter`-changed. A formatter write is a **separate journaled transaction**
+  (`origin: "formatter"`).
 
 ## Result format (to the model)
 
@@ -182,23 +241,25 @@ Applied 3 edits in 2 files (txn_01J…):
 Diagnostics: 0 introduced · 1 resolved (TS2304 'isValidId' in service.ts)
 ```
 
-On rejection, **every** call in the transaction gets `is_error: true` and a message beginning
-with `NOT APPLIED`. The call that caused the rejection gets the details. The others say
-*"not applied because the transaction was rejected (see call 2)"*.
+On rejection or abort, **every** call in the transaction gets `is_error: true` and a message
+beginning with `NOT APPLIED`. The call that caused the rejection gets the details. The others
+say *"not applied because the transaction was rejected (see call 2)"*.
 
-## Rollback API
+## Rollback API (user-initiated undo)
 
-`rollback(txnId)` applies the reverse patch if the current file hashes equal the transaction's
-`afterHash`. Otherwise it uses a three-way merge with the before-blob, and refuses (reporting
-conflicts) if the merge is not clean. `restoreCheckpoint(checkpointId, paths?)` is the bigger
-hammer, exposed to the user via the protocol.
+`rollback(txnId)` runs as a **new journaled transaction** whose after-images are the original
+before-images, valid if the current file hashes equal the transaction's `afterHash`. Otherwise it
+uses a three-way merge with the before-blob, and refuses (reporting conflicts) if the merge is
+not clean. `restoreCheckpoint(checkpointId, paths?)` is the bigger hammer, exposed to the user
+via the protocol.
 
 ## Telemetry
 
-`txn_applied`, `txn_rejected` by reason (`not_found`, `ambiguous`, `stale_view`, `firewall`,
-`external_change`, `noop`), `match_rung` histogram, `blind_edits`, `wasteful_rewrites`,
-`edit_retry_success_rate` (whether the next attempt after a rejection succeeds), and bytes
-written.
+`txn_applied`, `txn_rejected` by reason (`instructions_pending`, `not_found`, `ambiguous`,
+`stale_view`, `firewall`, `noop`), `txn_aborted` (`external_change`), `match_rung` histogram,
+`blind_edits`, `wasteful_rewrites`, `instruction_gate_rejections`,
+`edit_retry_success_rate` (whether the next attempt after a rejection succeeds), bytes written,
+PREPARE latency (the cost of `synchronous=FULL` and fsyncs), and recoveries by outcome.
 
 ## Acceptance tests
 
@@ -207,16 +268,30 @@ written.
 2. Ambiguous `oldString` → rejected, with all match locations listed.
 3. CRLF file: the edit applies, CRLF is preserved, and no other line changes.
 4. Indentation-insensitive match re-indents a multi-line `newString` correctly (tabs and spaces).
-5. A concurrent external modification between overlay build and commit → `external_change`,
-   with no partial writes.
-6. Fault injection: the second file's rename fails → the first is restored, byte-identical.
-7. `seen_stale`: read a region, then an external edit changes a line adjacent to the edit
+5. A concurrent external modification between overlay build and VERIFY → `TransactionAborted
+   (external_change)`, with no target touched.
+6. `seen_stale`: read a region, then an external edit changes a line adjacent to the edit
    target (within the ±3-line context), then replace on the unchanged target line → stale
    rejection that includes the current text.
-8. **Crash points** (kill -9 the process at each step of a 3-file transaction: after blobs, after
-   temp files, after `TransactionPrepared`, after each rename, before `TransactionApplied`):
-   on restart the workspace is either fully before or fully after, and the recovery event
-   matches the table; an external edit injected during the crash window yields `conflict` and no
-   file is changed.
-9. **Instructions withheld:** an edit under a directory with an unseen `AGENTS.md` is not
-   applied, no temp file or blob is written, and the resent edit applies.
+7. **Instruction gate:** an edit under a directory with an undelivered nested `AGENTS.md` →
+   `instructions_pending` with its text. Nothing is written. The resend applies. A mutating
+   shell command with that `cwd` is not run until the instructions are delivered.
+8. **Crash-injection matrix.** A test harness kills the runtime process (SIGKILL) at each point
+   below, for a 3-file transaction (create + modify + delete). On restart, recovery must produce
+   the stated outcome, with every file byte-identical (content and mode) to the expected image:
+
+| Kill point | Expected recovery outcome |
+|---|---|
+| K1 after blobs, before the PREPARE commit | No journal record → nothing to recover. Disk = before. Orphan blobs collected by `kai gc` |
+| K2 after the PREPARE commit, before any temp | Aborted (`crash_before_swap`). Disk = before |
+| K3 after the k-th temp write (k = 1..3) | Temps removed. Aborted. Disk = before |
+| K4 after the 1st rename / unlink | Rolled back. Disk = before |
+| K5 after the 2nd rename / unlink | Rolled back. Disk = before |
+| K6 after the last swap, before COMMIT | Rolled forward (`TransactionApplied {recovered:true}`). Disk = after |
+| K7 during rollback, after the j-th restore | Second recovery run finishes the rollback. Disk = before |
+| K8 any of K4/K5 **plus** an external edit to one file before restart | `RecoveryConflict`. Nothing touched. Task `blocked` (`recovery_conflict`) |
+
+   Each case also asserts that `kai db rebuild` gives consistent projections afterwards, and that
+   the resumed task starts a new epoch whose brief mentions the recovery.
+9. Power-loss durability is spot-checked on Linux with a block-level crash-simulation harness
+   (e.g. `dm-log-writes` replay of every crash point) in nightly CI, not per commit.

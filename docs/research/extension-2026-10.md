@@ -2,7 +2,7 @@
 
 - Accessed: **2026-10-05** (all sources below)
 - Scope: the six release features added by [ADR-0017](../adr/0017-release-scope-macos-multi-provider.md)
-- Consumers: ADRs [0017](../adr/0017-release-scope-macos-multi-provider.md)–[0016](../adr/0016-robustness-amendments.md)
+- Consumers: ADRs [0017](../adr/0017-release-scope-macos-multi-provider.md)–[0024](../adr/0024-macos-desktop-shell.md)
   and the specs they reference
 
 This note separates **what a source documents or shows** from **what Kai proposes**. Every

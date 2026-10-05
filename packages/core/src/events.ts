@@ -3,9 +3,12 @@
  *
  * Append-only event log + projections of the WORKSPACE store. The global learning store and the
  * app store have their own logs; no transaction spans stores (docs/specs/event-model.md#stores).
- * Spec: docs/specs/event-model.md · Decisions: docs/adr/0004, docs/adr/0018, docs/adr/0022, docs/adr/0023, docs/adr/0016.
+ * Spec: docs/specs/event-model.md · Decisions: docs/adr/0004, amended by docs/adr/0015, docs/adr/0016,
+ * docs/adr/0018, docs/adr/0022 and docs/adr/0023.
  * Only a representative subset of event payloads is typed here; the full catalog is in the spec.
- * Invariant: no payload contains secret material (keys, tokens, codes, verifiers, state, nonce, cookies).
+ * Invariants: only user-action protocol handlers emit TaskContract*, RecoveryResolved and
+ * IntegrityReviewResolved {by: "user"} (see UserOnlyEventType); no payload contains secret material
+ * (keys, tokens, codes, verifiers, state, nonce, cookies).
  */
 import type {
   AppliedEffort,
@@ -14,9 +17,11 @@ import type {
   ChromeStatus,
   CheckpointId,
   ContentHash,
+  ContractEntry,
   CredentialRef,
   EffortLevel,
   EpochId,
+  FailureClassification,
   FinalTaskState,
   LearningJobId,
   LineRange,
@@ -35,15 +40,17 @@ import type {
   UsageClass,
   VerificationRunId,
 } from "@kai/protocol";
-import type { ContextManifest, ContinuationMode, EpochReason, PreflightAction } from "./context.js";
-import type { FindingDisposition } from "./critic.js";
+import type { ContextManifest, ContinuationMode, EpochReason, InstructionFileRef, PreflightResult } from "./context.js";
+import type { TaskContract, UserActionToken } from "./contract.js";
+import type { CriticMode, FindingDisposition } from "./critic.js";
 import type { FirewallReport } from "./firewall.js";
 import type { RequestPurpose } from "./governor.js";
+import type { IntegrityDetectorId, JustificationStatus } from "./integrity.js";
 import type { FinalizationTrigger, SkillVersionRef } from "./learning.js";
-import type { RecoveryOutcome } from "./patch.js";
+import type { PreparedTransaction, RecoveryChoice } from "./patch.js";
 import type { CanonicalStep, CapabilitySnapshot, TurnStatus, TurnUsage } from "./provider.js";
 import type { ResearchOutcome, SourceRecord } from "./research.js";
-import type { EvidenceBundle, FailureClassification, Tier } from "./verify.js";
+import type { EvidenceBundle, Tier } from "./verify.js";
 
 export interface EventEnvelope<T extends KaiEventType = KaiEventType> {
   readonly seq: number; // store-assigned, strictly increasing
@@ -63,10 +70,10 @@ export interface KaiEventPayloads {
   SessionEnded: { reason: string };
   UserMessage: { text: string };
   SteeringMessage: { taskId: TaskId; text: string };
-  TaskCreated: { taskId: TaskId; projectId: ProjectId; objective: string; acceptance: string[]; scopeHints: string[]; owner: "user" };
-  /** The only way user-owned criteria change (docs/adr/0016). */
-  TaskAmended: { taskId: TaskId; objective?: string; acceptance?: string[]; by: "user" };
-  DerivedCriteriaRecorded: { taskId: TaskId; criteria: string[] };
+  /** The objective and acceptance live only in the contract. */
+  TaskCreated: { taskId: TaskId; projectId: ProjectId; scopeHints: string[] };
+  TaskContractRecorded: { taskId: TaskId; contract: TaskContract };
+  TaskContractAmended: { taskId: TaskId; version: number; entry: ContractEntry; by: "user" };
   TaskStateChanged: { taskId: TaskId; from: TaskState; to: TaskState; reason: string };
 
   EpochStarted: { epochId: EpochId; reason: EpochReason; previousEpochId?: EpochId; continuation: ContinuationMode };
@@ -74,8 +81,15 @@ export interface KaiEventPayloads {
   ToolLoadoutChanged: { epochId: EpochId; declarationsHash: ContentHash; tools: string[]; packs: string[] };
   PromptVersioned: { systemPromptHash: ContentHash; projectInstructionsHash: ContentHash };
   ContextElided: { epochId: EpochId; turnRange: [TurnId, TurnId]; estTokensFreed: number };
-  RequestPreflighted: { turnId: TurnId; estimatedRequestTokens: number; limit: number; actions: PreflightAction[] };
-  InstructionsWithheldMutation: { turnId: TurnId; dir: string; files: string[]; instructionsBlob: ContentHash };
+  InstructionsIndexed: { files: InstructionFileRef[] };
+  InstructionFilesChanged: { paths: string[]; hashes: ContentHash[] };
+  PreflightDecision: {
+    turnId: TurnId;
+    projectedInputTokens: number; // ESTIMATED
+    breakdown: PreflightResult["breakdown"];
+    action: PreflightResult["action"];
+    reshapedItems?: number;
+  };
   LearningSnapshotPinned: { taskId: TaskId; snapshotHash: ContentHash; skillVersions: SkillVersionRef[] };
   LearnedProceduresSelected: { epochId: EpochId; skillVersions: SkillVersionRef[]; estTokens: number };
 
@@ -130,22 +144,22 @@ export interface KaiEventPayloads {
     contentHash: ContentHash;
     ranges: (LineRange | "outline")[];
     symbol?: string;
-    delivery: "full" | "range" | "outline" | "stub" | "diff" | "edit_echo";
+    delivery: "full" | "range" | "outline" | "stub" | "diff" | "edit_echo" | "instructions";
     estTokens: number;
   };
 
   TransactionProposed: { txnId: TransactionId; turnId: TurnId; editCount: number; paths: string[] };
-  /** Durable intent before the first rename. */
-  TransactionPrepared: { txnId: TransactionId; manifestBlob: ContentHash };
-  TransactionRecovered: { txnId: TransactionId; outcome: RecoveryOutcome; paths: string[] };
   FirewallEvaluated: { txnId: TransactionId; report: FirewallReport };
-  TransactionApplied: {
-    txnId: TransactionId;
-    files: { path: string; beforeHash: ContentHash | null; afterHash: ContentHash | null }[];
-    reversePatchBlob: ContentHash;
-  };
+  /** Before PREPARE: nothing was written (reasons include instructions_pending). */
   TransactionRejected: { txnId: TransactionId; reason: string };
-  TransactionRolledBack: { txnId: TransactionId; reason: string };
+  /** Write-ahead journal record, committed with synchronous=FULL before any workspace write (J1). */
+  TransactionPrepared: { txnId: TransactionId; prepared: PreparedTransaction };
+  /** Commit marker. */
+  TransactionApplied: { txnId: TransactionId; recovered?: boolean };
+  TransactionAborted: { txnId: TransactionId; reason: "external_change" | "crash_before_swap"; recovered?: boolean };
+  TransactionRolledBack: { txnId: TransactionId; reason: string; recovered?: boolean };
+  RecoveryConflict: { txnId: TransactionId; paths: string[] };
+  RecoveryResolved: { txnId: TransactionId; choices: RecoveryChoice[]; by: "user" };
   CheckpointCreated: { checkpointId: CheckpointId; gitRef: string; reason: string };
   ExternalChangeDetected: { paths: string[]; detectedBy: "watcher" | "hash_check" };
 
@@ -159,12 +173,29 @@ export interface KaiEventPayloads {
     fingerprints: string[];
   };
   TaskVerdict: { taskId: TaskId; state: FinalTaskState; evidence: EvidenceBundle };
-  IntegrityFinding: { taskId: TaskId; kind: string; severity: "block" | "flag" | "info"; path: string; justified: boolean };
+  /** Feeds flake_history; written only from baseline states (no agent changes). */
+  BaselineRunCompleted: { checkpointCommit: string; testId: string; passed: number; failed: number };
+  IntegrityFinding: {
+    taskId: TaskId;
+    findingId: string;
+    txnId?: TransactionId;
+    kind: IntegrityDetectorId;
+    severity: "low" | "high";
+    action: "block" | "flag" | "info";
+    path: string;
+    detail: string;
+    status: JustificationStatus;
+    citation?: { entryId: string; quote: string };
+  };
+  IntegrityReviewResolved: {
+    findingId: string;
+    by: "critic" | "user";
+    outcome: "consistent" | "inconsistent" | "approved" | "rejected" | "unavailable";
+  };
   StuckDetected: { taskId: TaskId; rule: string; evidence: string };
   ReplanStarted: { taskId: TaskId; briefBlob: ContentHash };
-  CriticCompleted: { taskId: TaskId; blocking: boolean; findingCount: number; dispositions: FindingDisposition[]; usage: TurnUsage };
-  ReviewObligationOpened: { obligationId: string; taskId: TaskId; kind: "integrity" | "user_required_trigger"; source: string };
-  ReviewObligationResolved: { obligationId: string; by: "critic" | "user"; outcome: string };
+  CriticRequested: { taskId: TaskId; mode: CriticMode; triggers: string[] };
+  CriticCompleted: { taskId: TaskId; mode: CriticMode; findingCount: number; dispositions: FindingDisposition[]; blocking: boolean; budgetExhausted: boolean; usage: TurnUsage };
 
   // Projects and learning (workspace side; docs/specs/learning-service.md#events)
   ProjectCreated: { projectId: ProjectId; title: string };
@@ -189,11 +220,21 @@ export interface KaiEventPayloads {
 
 export type KaiEventType = keyof KaiEventPayloads;
 
+/** Events that only KSP user-action handlers may append (event-model invariant 8). */
+export type UserOnlyEventType = Extract<KaiEventType, "TaskContractRecorded" | "TaskContractAmended" | "RecoveryResolved">;
+
 /** Append-only store. Each append commits the event and its projection updates atomically. */
 export interface EventStore {
-  append<T extends KaiEventType>(
+  append<T extends Exclude<KaiEventType, UserOnlyEventType>>(
     event: Omit<EventEnvelope<T>, "seq" | "ts" | "v">,
   ): EventEnvelope<T>;
+  /** User-only events (and IntegrityReviewResolved/PermissionResolved with by: "user") require the capability. */
+  appendUserAction<T extends KaiEventType>(token: UserActionToken, event: Omit<EventEnvelope<T>, "seq" | "ts" | "v">): EventEnvelope<T>;
+  /**
+   * PREPARE: fsync the referenced blobs, then commit TransactionPrepared with synchronous=FULL.
+   * Resolves only once the record is durable against power loss.
+   */
+  appendDurable(event: Omit<EventEnvelope<"TransactionPrepared">, "seq" | "ts" | "v">): EventEnvelope<"TransactionPrepared">;
   read(sessionId: SessionId, opts?: { afterSeq?: number; types?: readonly KaiEventType[] }): Iterable<EventEnvelope>;
   /** Content-addressed blob storage (written before referencing events). */
   putBlob(bytes: Uint8Array): ContentHash;

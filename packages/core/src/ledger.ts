@@ -2,12 +2,13 @@
  * SCAFFOLD: types only. Not an implementation.
  *
  * Read Ledger: what source the model has seen (path, range, hash, epoch); de-duplication and staleness.
- * Spec: docs/specs/read-ledger.md
+ * Also records instruction-file deliveries for the Patch Engine's pre-mutation instruction gate.
+ * Spec: docs/specs/read-ledger.md · Decision: docs/adr/0016.
  */
 import type { ArtifactId, ContentHash, EpochId, LineRange, SessionId, TaskId, TurnId } from "@kai/protocol";
 import type { SymbolCard } from "./codeintel.js";
 
-export type ReadDelivery = "full" | "range" | "outline" | "stub" | "diff" | "edit_echo";
+export type ReadDelivery = "full" | "range" | "outline" | "stub" | "diff" | "edit_echo" | "instructions";
 
 export interface LedgerEntry {
   readonly sessionId: SessionId;
@@ -61,4 +62,6 @@ export interface ReadLedger {
   /** Apply line shifts from an applied transaction's hunks to visible segments. */
   remap(path: string, hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newLines: number }[]): void;
   filesRead(taskId: TaskId): readonly FileReadSummary[];
+  /** Instruction gate: was this instruction file delivered (seed or notice) in this epoch at this hash? */
+  instructionsDelivered(path: string, hash: ContentHash, epochId: EpochId): boolean;
 }

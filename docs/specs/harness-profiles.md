@@ -12,8 +12,8 @@ critic and stopping policy. It lets each model family be asked in the way it han
 without duplicating patching, verification, persistence, learning or research.
 
 **A profile can never relax what is accepted.** It cannot disable or weaken the Read Ledger,
-Result Shaper, Patch Engine, Firewall, Verification Engine, Integrity Guard, review
-obligations, command policy, research policy or learning linter.
+Result Shaper, Patch Engine, Firewall, Verification Engine, Integrity Guard, mandatory
+`integrity_review`, the instruction gate, command policy, research policy or learning linter.
 
 | A profile may change | A profile may not change |
 |---|---|
@@ -21,7 +21,7 @@ obligations, command policy, research policy or learning linter.
 | Tool aliases, descriptions, schema dialect | Tool semantics, authorization path, argument validation |
 | Effort rule modifiers and native mapping | Risk floors (it may raise, never lower them) |
 | Context sizing ratios within the formula's bounds | The preflight rule (no over-limit request) |
-| Optional critic rounds, advisory caps, stop wording | Mandatory review obligations, integrity escalation |
+| Optional `risk_review` rounds, advisory caps, stop wording | Mandatory `integrity_review` and its reserved budget, integrity escalation |
 | Parallel-call policy | Transaction semantics (all edits of a response are one transaction) |
 
 ## Interface
@@ -66,7 +66,7 @@ Overrides are validated with `appliesTo`. The selected `profileId@version` is re
 ## Shared prompt contract
 
 All three profiles state the same facts; wording and length differ. Every profile prompt must
-cover, in this order: role and goal; acceptance criteria are user-owned; navigation discipline
+cover, in this order: role and goal; the Task Contract (objective, acceptance criteria, constraints) is user-owned; navigation discipline
 and ledger stubs; editing rules and that rejected edits were not applied; artifacts and
 `read_artifact`; verification (`complete_task` triggers checks; never weaken tests); epochs and
 `update_plan`; installed APIs over memory; research rules when the pack is active; trust
@@ -87,8 +87,8 @@ You are Kai, a coding agent working in the user's repository through tools.
 Goal: meet the task's acceptance criteria with the smallest correct change.
 
 Rules
-- The objective and acceptance criteria come from the user and are fixed. You may add derived
-  criteria with update_plan; you may not drop or narrow any.
+- The Task Contract is the user's and is fixed. You may add proposed_criteria with
+  update_plan; you may not drop or narrow any requirement.
 - Find code with grep_search and read_symbol, then read narrow ranges. A stub means you already
   have that content.
 - Edit with replace using exact old_string. "NOT APPLIED" means nothing changed: fix the cause.
@@ -131,7 +131,7 @@ The founding system prompt contract and Gemini-CLI-shaped tools, unchanged
 | Core tool names | Gemini CLI shapes (`read_file`, `replace`, …) | Same names (no alias needed; measured) | Same names |
 | Descriptions | Founding concise style | ≤ 60 tokens each; acceptance-focused | ≤ 40 tokens each; imperative |
 | Schema dialect | Full JSON Schema from Zod | Full; strict-compatible variant (optional → nullable, `additionalProperties: false`) only if the snapshot marks strict mode supported and the ablation wins | **Simple**: no `oneOf`/`anyOf`, nesting depth ≤ 2, enums as strings, no `format`, all descriptions present |
-| `update_plan` | Full shape | Full shape | Split rendering: `update_plan` (plan, notes, decisions, derived_criteria) only; `scope`, `new_symbols`, `request_capabilities` move to a separate optional `plan_scope` alias declared only when the endpoint passed probe P8 |
+| `update_plan` | Full shape | Full shape | Split rendering: `update_plan` (plan, notes, decisions, interpretations, proposed_criteria) only; `scope`, `new_symbols`, `request_capabilities` move to a separate optional `plan_scope` alias declared only when the endpoint passed probe P8 |
 | Parallel calls | Allowed (snapshot) | Allowed (snapshot) | Disabled unless the snapshot says `supported`; then allowed for read-only tools only |
 | Notices | `user` role, `<kai_notice>` | `developer` role, `<kai_notice>` | `user` role, `<kai_notice>` |
 | Packs at start | core + auto packs | core + auto packs | core + `tests` only; `code_intel` and `research` added by request, at epoch boundaries |
@@ -200,10 +200,13 @@ The Gemini row reproduces the founding defaults exactly. The preflight rule
 
 ### Shared rules (all profiles)
 
-- **Required review** = open review obligations ([critic](critic.md#review-obligations)) plus
-  risk triggers marked required by the user. It is never skipped, whatever the budget.
-- A **blocking** finding must name a violated requirement (user objective, acceptance
-  criterion, constraint) **or** a concrete defect, with location, impact and evidence; quoted
+- **Mandatory review** = `integrity_review` of contract-backed, high-severity integrity
+  findings ([critic](critic.md#modes-and-budgets)). It runs from its reserved budget whatever
+  the profile, `critic.mode` or `risk_review` budget; findings it cannot resolve stay
+  **unresolved** and block `verified` (headless: `blocked`, `integrity_review_required`).
+- Everything below applies to the optional **`risk_review`**.
+- A **blocking** finding must name a violated [Task Contract](task-contract.md) entry
+  (objective, acceptance criterion, constraint) **or** a concrete defect, with location, impact and evidence; quoted
   code must exist. Quote matching proves the code exists, not that the diagnosis is right, so
   blocking findings also need a **reproduction** (a test or command that fails now) or must be in
   a category where Kai accepts a validated argument without one: `security`, `concurrency`,
@@ -220,7 +223,7 @@ The Gemini row reproduces the founding defaults exactly. The preflight rule
 | Optional critic rounds after a blocking fix | ≤ 2 (founding) | **≤ 1** | ≤ 1, only if `structuredReview` supported |
 | Advisory findings listed | ≤ 10 | **≤ 5** | ≤ 5 |
 | Stop wording | Founding | Explicit stop + reopen list (above) | Short stop line |
-| No structured review possible | n/a | n/a | Deterministic fallback: obligations → user approval; triggers listed as *unreviewed* |
+| No structured review possible | n/a | n/a | `risk_review` skipped, triggers listed as *unreviewed*; `integrity_review` findings → user approval (headless: `blocked`) |
 
 ### Criticism examples (`openai` profile)
 
@@ -258,7 +261,7 @@ unchanged) → disposition `duplicate`; not shown to the worker.
 | Context sizing | Founding defaults (1M window) | Formula; 400k-class windows reach founding caps | Formula; small windows scale down; < 10k usable → chat only |
 | Critique | Founding critic (≤ 2 incremental rounds) | Evidence-bound, ≤ 1 optional round, advisory cap 5 | Structured only if supported; deterministic fallback |
 | Usage | Reported incl. cached and thought tokens | Reported incl. cached and reasoning tokens; subscription as plan usage | Often partial or unknown; estimates labelled |
-| Shared protections | Ledger, shaper, Patch Engine, Firewall, gate, integrity, obligations, repair fingerprints, learning, research | same | same |
+| Shared protections | Ledger, shaper, Patch Engine, Firewall, gate, integrity guard and `integrity_review`, instruction gate, preflight, repair fingerprints, learning, research | same | same |
 
 ## Comparison with OpenCode
 

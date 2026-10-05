@@ -2,7 +2,7 @@
  * SCAFFOLD: types only. Not an implementation.
  *
  * Provider-neutral canonical turn types, capability snapshots and the ModelProvider port.
- * Decisions: docs/adr/0011-provider-extensibility-boundary.md, docs/adr/0020-providers-routes-profiles-capabilities.md
+ * Decisions: docs/adr/0011-provider-extensibility-boundary.md, docs/adr/0018-providers-routes-profiles-capabilities.md
  * Adapters: docs/specs/gemini-provider.md, docs/specs/openai-responses-provider.md, docs/specs/compatible-endpoints.md
  *
  * The canonical step model is a superset shaped by the richest providers (Gemini Interactions
@@ -124,6 +124,13 @@ export interface CapabilitySnapshot {
   readonly tokenizer: "known" | "unknown"; // known = reported usage has calibrated the estimator
   readonly toolChangesWithinChainAreCacheSafe: Support; // G2
   readonly mode: "agent" | "chat_only";
+  /**
+   * Whether a chained request's reported input includes the previous response's output / thoughts (G10).
+   * Used by request preflight and complete request accounting. "unknown" → assume output yes, thoughts no,
+   * and keep the projection conservative.
+   */
+  readonly chainedInputIncludesPriorOutput: Support;
+  readonly chainedInputIncludesPriorThoughts: Support;
 }
 
 /** Founding name, kept so the founding specs still read correctly. */

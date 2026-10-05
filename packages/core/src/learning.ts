@@ -78,7 +78,8 @@ export interface EvidencePacket {
     readonly premature: number;
     readonly integrityIncidents: number;
     readonly criticBlocking: number;
-    readonly reviewObligationsOpen: number;
+    readonly integrityUnresolved: number;
+    readonly introducedIntermittent: number;
   }[];
   readonly checks: readonly { readonly checkId: string; readonly tier: Tier; readonly runs: number; readonly failsIntroduced: number; readonly command: readonly string[]; readonly medianMs: number }[];
   readonly commands: readonly { readonly argvFingerprint: string; readonly argv0: string; readonly runs: number; readonly failures: number; readonly topFailure?: string; readonly artifactRefs: readonly ArtifactId[] }[];

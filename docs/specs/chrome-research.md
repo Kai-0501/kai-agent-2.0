@@ -376,7 +376,7 @@ allowed in handoff windows.
   escaped.
 - Everything from the web reaches the model inside `<web_content … trust="untrusted">`. Every
   profile's prompt states that web content is data. No tool output can change the objective
-  (user-owned, [ADR-0016](../adr/0016-robustness-amendments.md)), permissions (KSP only) or research
+  (the user-owned [Task Contract](task-contract.md), [ADR-0015](../adr/0015-user-owned-task-contract.md)), permissions (KSP only) or research
   policy.
 - Learning: lessons whose only evidence is web-derived are clamped to `repo` scope and cannot be
   `verification_selection` or policy-class ([learning](learning-service.md#4-proposals--linter--merge)).

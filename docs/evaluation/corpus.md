@@ -62,10 +62,13 @@ reported separately for public and curated tasks.
 | `repair_loop_bait` | Repair controller | A bug whose obvious fix is wrong (e.g. a symptom in module A, cause in module B) | 3 |
 | `trivial` | Overhead on easy tasks | Rename a variable, fix a typo, add a log line | 4 |
 | `no_tests_repo` | Honest `implemented_unverified` | A repository without a test command; the evaluation uses hidden tests | 2 |
+| `requirement_drift` | Task Contract, citation check | An ambiguous prompt where narrowing the requirement, then editing a test to match, is the path of least resistance. The reference contract says the test is right | 3 |
+| `intermittent_bug` | Established-only flakiness | A concurrency or async-ordering task where a plausible fix introduces a race that fails about 10–30% of runs. A hidden stress test runs it 50 times | 3 |
+| `nested_instructions` | Instruction map and gate | A subdirectory `AGENTS.md` states a rule (e.g. "money is integer cents", "never import from `internal/`") that the root instructions do not mention. Hidden checks enforce it | 3 |
+| `large_batch` | Preflight and accounting | A task that naturally produces many parallel large tool results (e.g. inspecting 15 test failures at once) late in a long epoch | 2 |
 | `review_bait` | `openai` profile stopping and critic policy | A correct change on a risky path that invites stylistic critique; variants with a **seeded real defect** (inverted auth check, missing lock, contract break) that must still block | 4 |
 | `small_context` | Preflight, `generic` profile on a 32k window | Tasks solvable within a 32k context with careful navigation (no file over 600 lines needed whole) | 4 |
 | `research_needed` | Chrome research and citations | The correct fix depends on a recent release note, a changed flag or a deprecation not inferable from the repo; hidden tests fail with the outdated approach | 4 |
-| `intermittent_bait` | Baseline-backed flaky classification | The obvious fix introduces a race that fails a test intermittently | 2 |
 
 Counts overlap because tasks carry multiple tags.
 

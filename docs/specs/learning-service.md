@@ -3,7 +3,7 @@
 - Package: `packages/core` (`learning/`: ports, evidence packet, linter, retrieval), `packages/runtime` (stores, outbox worker, Markdown projection)
 - Decision: [ADR-0022](../adr/0022-shared-procedural-learning.md)
 - Research: [Hermes skills, memory, curator](../research/extension-2026-10.md#5-hermes-procedural-learning-r17r18)
-- Collaborators: [event model](event-model.md), [Context Compiler](context-compiler.md), [telemetry](telemetry.md), [Verification Engine](verification-engine.md), [credentials](credentials.md), [harness profiles](harness-profiles.md), [Chrome research](chrome-research.md)
+- Collaborators: [Task Contract](task-contract.md), [event model](event-model.md), [Context Compiler](context-compiler.md), [telemetry](telemetry.md), [Verification Engine](verification-engine.md), [credentials](credentials.md), [harness profiles](harness-profiles.md), [Chrome research](chrome-research.md)
 
 ## Responsibility
 
@@ -18,7 +18,7 @@ every route and profile, by:
 4. retrieving a **few relevant procedures** into task seeds under a hard budget, pinned per task.
 
 **Not responsible for:** changing permissions, verification requirements, integrity policy,
-user objectives or runtime code (never automatic; [policy linter](#policy-linter)); deciding
+the user-owned [Task Contract](task-contract.md) or runtime code (never automatic; [policy linter](#policy-linter)); deciding
 task completion (the Verification Engine); general chat memory or user profiling.
 
 The optimization target is **total resource use per successfully completed comparable
@@ -150,9 +150,10 @@ interface EvidencePacket {
           verificationProfileHash: ContentHash; instructionsHash?: ContentHash };
   routes: { routeId: RouteId; profileId: ProfileId; model: string; privacy: PrivacyClass }[];
   tasks: { taskId: TaskId; objectiveDigest: string /* ≤ 200 chars */; finalState: FinalTaskState;
-           userAcceptance: number; derivedCriteria: number; epochs: number; turns: number; replans: number;
+           contractCriteria: number; proposedCriteria: number; epochs: number; turns: number; replans: number;
            repairAttempts: number; stuckRules: StuckRule[]; premature: number;
-           integrityIncidents: number; criticBlocking: number; reviewObligationsOpen: number }[];
+           integrityIncidents: number; integrityUnresolved: number; criticBlocking: number;
+           introducedIntermittent: number }[];
   checks: { checkId: string; tier: Tier; runs: number; failsIntroduced: number; command: string[]; medianMs: number }[];
   commands: { argvFingerprint: string; argv0: string; runs: number; failures: number;
               topFailure?: string /* normalized first error line */; artifactRefs: ArtifactId[] }[] /* top 20 */;
@@ -286,9 +287,9 @@ proposal (`SkillProposalRejected {rule}`); it is listed in the retrospective.
 | `P2_weakens_required_checks` | Narrow required check scope, raise timeouts, mark tests flaky, or replace a check with a weaker one | "use `--passWithNoTests`"; "add to knownFlaky" |
 | `P3_integrity` | Suggest editing tests, snapshots, suppressions or verification config to pass | "update snapshots with -u when they fail" |
 | `P4_permissions` | Grant, widen or bypass command, path, network or research permissions | "always allow `curl`"; "disable the proxy" |
-| `P5_objectives` | Reinterpret, narrow or replace user objectives or acceptance criteria | "acceptance criterion 2 can be ignored if…" |
+| `P5_objectives` | Reinterpret, narrow or replace Task Contract entries (objective, acceptance criteria, constraints) | "acceptance criterion 2 can be ignored if…" |
 | `P6_runtime` | Change Kai's runtime code, config files, credentials or hooks | "edit ~/.kai/config.json to…" |
-| `P7_review` | Suppress required review, integrity escalation or critic triggers | "tell the critic the change is low risk" |
+| `P7_review` | Suppress `integrity_review`, integrity escalation or `risk_review` triggers | "tell the critic the change is low risk" |
 | `P8_secrets_and_private` | Contain redaction hits, absolute paths outside the workspace, or another workspace's identifiers | — |
 | `P9_unverifiable` | Claim facts with no resolvable evidence ref | — |
 
@@ -359,7 +360,7 @@ stateDiagram-v2
 | Transition | Rule (initial thresholds; config) |
 |---|---|
 | candidate → provisional | Automatic, no prompt: linter passed, ≥ 1 evidence ref to a verified task or a resolved failure fingerprint, scope ≤ `stack`. Provisional skills are retrievable, rendered with `(provisional)` and ranked lower |
-| provisional → validated (`observation`) | Shown **and followed** in ≥ `validatedMinProjects` (2) later projects (distinct project IDs, in scope), each with final states no worse than the project's comparable baseline (all tasks `verified`, or the same final-state profile as the origin), **zero** integrity incidents or review obligations attributed to it, and no open contradiction |
+| provisional → validated (`observation`) | Shown **and followed** in ≥ `validatedMinProjects` (2) later projects (distinct project IDs, in scope), each with final states no worse than the project's comparable baseline (all tasks `verified`, or the same final-state profile as the origin), **zero** integrity incidents or unresolved integrity findings attributed to it, and no open contradiction |
 | provisional → validated (`controlled_eval`) | A learning-on vs learning-off evaluation over a project family passes the [quality bar](#measurement) |
 | scope widening | A new version with wider scope needs evidence from ≥ 2 distinct repositories (`stack`/`language`) or a controlled evaluation (`global`) |
 | any → retired (`contradicted`) | ≥ 2 contradictions, or 1 contradiction of severity `harmful` (an introduced defect, integrity incident or required-check failure linked to following it) |
@@ -383,7 +384,7 @@ Runs when the Context Compiler builds a seed ([context-compiler](context-compile
    compatible with the task's route, prerequisites passing) and its hash. The runtime appends
    `LearningSnapshotPinned {taskId, snapshotHash, skillVersions}`. Every epoch of the task
    retrieves from this snapshot only.
-2. **Query:** terms from the user objective and acceptance criteria, changed and mentioned paths,
+2. **Query:** terms from the Task Contract (objective, acceptance criteria and constraints), changed and mentioned paths,
    the phase (`replan` adds `repair_deadend`), the repository fingerprint, languages and top
    dependencies.
 3. **Filter:** `model_scope` compatible with the active profile and model; scope compatible

@@ -1,7 +1,7 @@
 # Spec: Configuration, migration, identifiers and versioning
 
 - Packages: `packages/core` (`config.ts`: schema and defaults), `packages/runtime` (loading, migration, stores)
-- Decisions: [ADR-0017](../adr/0017-release-scope-macos-multi-provider.md), [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md), [ADR-0014](../adr/0014-measurement-gated-mechanisms.md)
+- Decisions: [ADR-0017](../adr/0017-release-scope-macos-multi-provider.md), [ADR-0018](../adr/0018-providers-routes-profiles-capabilities.md), [ADR-0014](../adr/0014-measurement-gated-mechanisms.md); config keys from [ADR-0015](../adr/0015-user-owned-task-contract.md) and [ADR-0016](../adr/0016-robustness-amendments.md)
 - Collaborators: [protocol](protocol.md), [event model](event-model.md), [credentials](credentials.md), [learning](learning-service.md), [Chrome research](chrome-research.md)
 
 ## Responsibility
@@ -50,10 +50,12 @@ it may lower or disable, never raise or enable.
 Unknown keys fail validation with the key path and the nearest valid key. Every threshold is a
 key; every mechanism has an ablation key ([ADR-0014](../adr/0014-measurement-gated-mechanisms.md)).
 
-**Instruction precedence** (what the model is told, highest first): explicit user instructions
-and acceptance criteria → applicable repository instructions (`AGENTS.md`, `KAI.md`,
-`GEMINI.md`, nearest directory wins) → harness notices about workspace state → learned
-procedures (advisory). Verification requirements, permissions and integrity policy are enforced
+**Instruction precedence** (what the model is told, highest first): the user-owned
+[Task Contract](task-contract.md) (objective, acceptance criteria, constraints, steering,
+amendments) → applicable repository instructions from the
+[instruction map](context-compiler.md#project-instructions-instruction-map-and-pre-mutation-gate)
+(`instructions.fileNames`, root → leaf, the more specific file wins) → harness notices about
+workspace state → learned procedures (advisory). Verification requirements, permissions and integrity policy are enforced
 by the runtime regardless of any text.
 
 ## Schema v2 (overview)
@@ -72,8 +74,11 @@ by the runtime regardless of any text.
   },
   "endpoints": { /* compatible-endpoints.md */ },
   "context": { /* founding ContextBudget keys; profiles scale them */ },
-  "verify": { "backgroundT2": true, "flakyReruns": 2, "baselineFlakyRuns": 3, "maxTargetedTests": 200 },
-  "critic": { "mode": "auto", "maxTokensPerTask": 60000 },
+  "verify": { "backgroundT2": true, "maxTargetedTests": 200, "rerunsNow": 4, "baselineRuns": 5,
+              "flakyWorseningDelta": 0.4, "flakeHistoryDays": 30 },        // ADR-0016
+  "critic": { "mode": "auto", "maxRiskReviewTokens": 60000,                   // risk_review only
+              "integrityReviewTokens": 20000, "integrityReview": true },     // reserved, mandatory
+  "instructions": { "fileNames": ["AGENTS.md", "KAI.md", "GEMINI.md"] },
   "learning": { /* learning-service.md */ },
   "research": { "mode": "ask_first_use", "queryPrivacy": "strict", "chrome": { "path": null, "minMajor": 136 } }
 }
@@ -119,7 +124,12 @@ The founding config (`~/.config/kai/config.json`, implicit schema v1, shape of t
 | `gemini.model` | `defaults.model`; `defaults.routeId = "gemini.api_key"` |
 | `gemini.stateMode`, `gemini.serviceTier`, `gemini.thinkingSummaries` | `routes["gemini.api_key"].gemini.*` |
 | (implicit) API key from `GEMINI_API_KEY` / keychain | `routes["gemini.api_key"].credential = "env:GEMINI_API_KEY"` (or the existing keychain item's `CredentialRef`) |
-| `context.*`, `ledger.*`, `shaper.*`, `readFile.*`, `firewall.*`, `repair.*`, `critic.*`, `tools.*`, `verify.*`, `shell.*` | unchanged paths; `verify.baselineFlakyRuns` added with its default |
+| `context.*`, `ledger.*`, `shaper.*`, `readFile.*`, `firewall.*`, `repair.*`, `tools.*`, `shell.*` | unchanged paths; new `context.*` keys ([ADR-0016](../adr/0016-robustness-amendments.md): `ingressBatchMax`, `preflightMarginMin`, `contractMaxTokens`, `instructionsMax`; ADR-0018: `safetyMargin`, `elisionBatchTokens`) added with defaults |
+| `critic.mode` | unchanged; now governs the optional `risk_review` only |
+| `critic.maxTokensPerTask` | `critic.maxRiskReviewTokens` (same value); `critic.integrityReviewTokens` and `critic.integrityReview` added with defaults |
+| `verify.backgroundT2`, `verify.maxTargetedTests` | unchanged |
+| `verify.flakyReruns` | **dropped** (a pass on rerun is not evidence; ADR-0016). `verify.rerunsNow`, `verify.baselineRuns`, `verify.flakyWorseningDelta`, `verify.flakeHistoryDays` added with defaults; `keysMoved` records the drop |
+| (new) | `instructions.fileNames` with its default |
 | `governor.mode` | unchanged; `fixed:<level>` values map to the canonical effort scale |
 | (new) | `learning.*`, `research.*`, `endpoints`, `release`, `app` with defaults |
 

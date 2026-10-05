@@ -9,8 +9,10 @@ from the benchmark or the live API contradicts it; `Accepted`, meaning implement
 a decision; the older ADR then links to it). All ADRs below are **Proposed**. Production
 implementation has not started.
 
-To change a decision, write a new ADR that supersedes the old one. Do not silently edit the
-decision section of an existing ADR. Typo fixes and added links are fine.
+To change a decision, write a new ADR that supersedes or **amends** the old one. Do not silently
+edit the decision section of an existing ADR. When an ADR is amended, its status line says
+"Amended by ADR-NNNN", and each affected decision point carries an inline *Amended by …* note
+summarizing the change, so readers never act on stale text. Typo fixes and added links are fine.
 
 | ADR | Decision | One-line summary |
 |---|---|---|
@@ -28,6 +30,8 @@ decision section of an existing ADR. Typo fixes and added links are fine.
 | [0012](0012-tool-surface-and-dynamic-exposure.md) | Tool surface and dynamic exposure | 10 stable core tools in Gemini CLI shapes; capability packs switched at epoch boundaries; `allowed_tools` for phases |
 | [0013](0013-workspace-safety-and-checkpoints.md) | Workspace safety and checkpoints | Hidden git-ref checkpoints with a private index; command policy; env sanitization; optional worktree mode |
 | [0014](0014-measurement-gated-mechanisms.md) | Measurement-gated mechanisms | Every mechanism ships with an ablation flag and telemetry, and must win in the benchmark to stay on by default |
+| [0015](0015-user-owned-task-contract.md) | User-owned task contract | Requirements are stored verbatim and are append-only by the user only. Model plans are non-authoritative. Weakening evidence needs a contract citation or user approval |
+| [0016](0016-robustness-amendments.md) | Robustness amendments (design review 1) | Established-only flakiness; write-ahead journaled transactions with crash recovery; request preflight; complete request accounting; pre-mutation instruction gate; mandatory vs optional critic review |
 | [0017](0017-release-scope-macos-multi-provider.md) | Release scope | R1 is a macOS app with three model routes, shared learning and Chrome research, built on the unchanged trusted core |
 | [0018](0018-providers-routes-profiles-capabilities.md) | Providers, routes, profiles, capabilities | Separate provider adapters, credential routes, harness profiles and tri-state capability snapshots; optional continuation; unknown usage stays unknown |
 | [0019](0019-sign-in-with-chatgpt-route.md) | Sign in with ChatGPT route | The documented open-source SIWC flow as its own credential route: host identity, dynamic registration, PKCE + OIDC, Keychain, explicit quota handling |

@@ -117,6 +117,8 @@ interface GeminiModelCapabilities extends ModelCapabilities {
   thinkingLevels: ("minimal" | "low" | "medium" | "high")[];  // G4
   chainedRequiresToolsEachTurn: boolean;                      // G1
   toolChangesWithinChainAreCacheSafe: boolean | "unknown";    // G2 (default "unknown" → treat as false)
+  chainedInputIncludesPriorOutput: boolean | "unknown";       // G10 (default: assume true)
+  chainedInputIncludesPriorThoughts: boolean | "unknown";     // G10 (default: assume false)
   statelessSupported: boolean;
   inputTokenLimit: number;    // from models.get: input_token_limit
   outputTokenLimit: number;
@@ -174,7 +176,9 @@ is reported.
 4. `allowed_tools` restricts calls (the model cannot call a declared-but-disallowed tool).
 5. Each thinking level accepted or rejected as probed. `total_thought_tokens` is monotone-ish
    across levels on a fixed reasoning prompt (sanity check, not strict).
-6. G1, G2 and G3 measurements are logged to a report artifact. They are not assertions.
+6. G1, G2, G3 and G10 measurements are logged to a report artifact. They are not assertions.
+   G10 is measured with a 3-turn chain: compare `total_input_tokens` deltas with the previous
+   turn's `total_output_tokens` and `total_thought_tokens`.
 
 ## Unit tests (offline)
 

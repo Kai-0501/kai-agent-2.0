@@ -2,7 +2,7 @@
  * SCAFFOLD: types only. Not an implementation.
  *
  * Tool registry, core tools and capability packs (Gemini-CLI "gemini-3" shapes where semantics match).
- * Spec: docs/specs/tool-surface.md · Decision: docs/adr/0012.
+ * Spec: docs/specs/tool-surface.md · Decisions: docs/adr/0012, amended by docs/adr/0015.
  */
 import type { ArtifactId, EpochId, SessionId, TaskId, TurnId } from "@kai/protocol";
 import type { ResearchToolArgs } from "./research.js";
@@ -45,15 +45,17 @@ export interface CoreToolArgs {
   run_shell_command: { command: string; description?: string; timeout_s?: number; background?: boolean };
   read_artifact: { artifact_id: string; query?: string; start_line?: number; end_line?: number };
   /**
-   * No objective or acceptance fields: those are user-owned and change only via task.amend
-   * (docs/adr/0016). derived_criteria can only add checks.
+   * Model-authored WORKING STATE only. Deliberately no `objective` / `acceptance_criteria`: those live
+   * in the user-owned Task Contract. The schema is strict, so passing them fails validation.
    */
   update_plan: {
     plan?: { step: string; status: "todo" | "doing" | "done" | "dropped" }[];
-    derived_criteria?: string[];
-    clarification?: string;
     decisions?: { decision: string; rationale: string }[];
-    notes?: { text: string; sources?: string[]; time_sensitive?: boolean }[];
+    notes?: (string | { text: string; sources?: string[]; time_sensitive?: boolean })[]; // sources = "src_x L1-9" citations
+    /** How the model reads ambiguous requirements. Commentary; never authoritative. */
+    interpretations?: string[];
+    /** Extra checks the model commits to. Additive only; never relaxes a requirement. */
+    proposed_criteria?: string[];
     scope?: { paths: string[]; symbols?: string[] };
     new_symbols?: string[];
     request_capabilities?: { pack: PackId; reason: string }[];
@@ -62,8 +64,15 @@ export interface CoreToolArgs {
   complete_task: { summary: string; claims?: string[] };
 }
 
-/** Tool arguments of all capability packs that are typed in core. */
-export type PackToolArgs = ResearchToolArgs;
+/** Pack tools whose argument shapes matter for correctness rules. */
+export interface PackToolArgs extends ResearchToolArgs {
+  /** `tests` pack. `reason` carries no authority; only a valid contract citation backs a change. */
+  justify_test_change: {
+    test_id_or_path: string;
+    reason: string;
+    contract_citation?: { entry_id: string; quote: string };
+  };
+}
 
 export interface ToolContext {
   readonly sessionId: SessionId;

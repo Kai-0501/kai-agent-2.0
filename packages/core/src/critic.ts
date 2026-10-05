@@ -1,37 +1,39 @@
 /**
  * SCAFFOLD: types only. Not an implementation.
  *
- * Selective, fresh-context critic (after deterministic verification passes, on risk triggers and
- * open review obligations). Blocking findings need a violated requirement or a concrete defect;
- * review obligations are discharged only by a validated review or the user.
- * Spec: docs/specs/critic.md · Decisions: docs/adr/0020, docs/adr/0016.
+ * Fresh-context critic with two modes:
+ * - risk_review: OPTIONAL, risk-triggered, own budget; skipping it never blocks `verified`.
+ * - integrity_review: MANDATORY for contract-backed high-severity integrity findings, RESERVED budget;
+ *   if it cannot resolve a finding, the task cannot be `verified` (user approves, or `blocked`).
+ * risk_review blocking findings need a violated contract entry or a concrete defect (reproduction or an
+ * exempt category); advisory findings never become repair items (docs/adr/0020).
+ * Spec: docs/specs/critic.md · Decisions: docs/adr/0009, amended by docs/adr/0016 and docs/adr/0020.
  */
-import type { TaskId } from "@kai/protocol";
+import type { ContractEntry, TaskId } from "@kai/protocol";
 import type { SymbolCard } from "./codeintel.js";
+import type { TaskContract } from "./contract.js";
 import type { IntegrityFindingRecord } from "./integrity.js";
+import type { TurnUsage } from "./provider.js";
 import type { EvidenceBundle } from "./verify.js";
 
-export interface CriticInput {
-  readonly objective: string;
-  readonly acceptanceCriteria: readonly string[];
-  readonly constraints: readonly string[];
+export type CriticMode = "risk_review" | "integrity_review";
+
+/** No worker history in either mode. Requirements come from the contract, never from model restatements. */
+export interface RiskReviewInput {
+  readonly contract: TaskContract;
   readonly diff: string;
   readonly changedSymbols: readonly SymbolCard[];
   readonly context: readonly { readonly path: string; readonly excerpt: string }[];
   readonly verification: EvidenceBundle;
   readonly integrity: readonly IntegrityFindingRecord[];
   readonly triggers: readonly string[];
-  /** Required reviews first (docs/specs/critic.md#review-obligations). */
-  readonly obligations: readonly ReviewObligation[];
 }
 
-export interface ReviewObligation {
-  readonly id: string;
-  readonly taskId: TaskId;
-  readonly kind: "integrity" | "user_required_trigger";
-  readonly source: string; // finding ID or trigger name
-  /** Budgets, failures and profiles without structured review never change this to discharged. */
-  readonly status: "open" | "discharged_critic" | "discharged_user";
+export interface IntegrityReviewInput {
+  readonly findings: readonly IntegrityFindingRecord[]; // contract-backed, high-severity
+  readonly testDiff: string;
+  readonly citedEntries: readonly ContractEntry[];
+  readonly changedProductionSymbols: readonly { readonly card: SymbolCard; readonly diff: string }[];
 }
 
 export interface CriticFinding {
@@ -39,19 +41,21 @@ export interface CriticFinding {
   readonly category: "logic" | "security" | "concurrency" | "error_handling" | "api_contract" | "tests" | "requirements" | "integrity";
   readonly path: string;
   readonly line?: number;
-  readonly requirementRef?: string; // "AC2", "objective", "constraint:…", or an obligation ID
+  readonly requirementRef?: string; // "AC2", "objective", "constraint:…"
   readonly claim: string;
-  readonly evidence: string; // quoted code must occur in the file, else unverified_claim
+  readonly evidence: string; // quoted code must occur in the file, else downgraded to unverified_claim
+  readonly contractEntryId?: string; // required for "requirements"
   readonly impact?: string;
-  readonly reproduction?: { readonly kind: "test" | "command"; readonly command: readonly string[] }; // must FAIL now to confirm
-  readonly suggestedCheck?: string; // legacy free-text alias of reproduction
+  readonly reproduction?: { readonly kind: "test" | "command"; readonly command: readonly string[] }; // run by Kai; must FAIL now to confirm
+  readonly suggestedCheck?: string;
+  readonly unverifiedClaim?: boolean;
 }
 
 export interface FindingDisposition {
   readonly fingerprint: string; // (path, enclosing symbol, category, normalized claim)
   readonly disposition:
-    | "blocking_confirmed"
-    | "blocking_validated" // exempt category with location + requirement/impact + quote
+    | "blocking_confirmed" // its reproduction was run and failed now
+    | "blocking_validated" // exempt category with valid location, quote and contract entry or impact
     | "advisory_preference"
     | "unverified_claim"
     | "not_reproduced"
@@ -59,12 +63,28 @@ export interface FindingDisposition {
     | "resolved";
 }
 
+export interface IntegrityVerdict {
+  readonly findingId: string;
+  readonly verdict: "consistent" | "inconsistent";
+  readonly contractQuote: string; // must occur verbatim in a cited entry
+  readonly codeQuote: string; // must occur in the test diff or changed production code
+  readonly reasoning: string;
+  /** Set by deterministic validation; a "consistent" verdict that fails it counts as unavailable. */
+  readonly validated: boolean;
+}
+
+export type RiskReviewOutcome =
+  | { readonly status: "completed"; readonly findings: readonly CriticFinding[]; readonly dispositions: readonly FindingDisposition[]; readonly blocking: boolean; readonly usage: TurnUsage }
+  | { readonly status: "skipped"; readonly reason: "no_triggers" | "mode_off" | "budget_exhausted" | "provider_error"; readonly unreviewedTriggers: readonly string[] };
+
+export type IntegrityReviewOutcome =
+  | { readonly status: "completed"; readonly verdicts: readonly IntegrityVerdict[]; readonly usage: TurnUsage }
+  /** Never "skipped": every finding in the batch stays unresolved and the user decides. */
+  | { readonly status: "unavailable"; readonly reason: "disabled" | "budget_exhausted" | "provider_error" | "invalid_output" };
+
 export interface Critic {
-  triggers(taskId: TaskId): Promise<{ readonly required: readonly ReviewObligation[]; readonly optional: readonly string[] }>;
-  review(input: CriticInput, signal: AbortSignal): Promise<{
-    readonly findings: readonly CriticFinding[];
-    readonly dispositions: readonly FindingDisposition[];
-    readonly blocking: boolean;
-    readonly obligationsDischarged: readonly string[];
-  }>;
+  riskTriggers(taskId: TaskId): Promise<readonly string[]>; // empty → risk review does not run
+  riskReview(input: RiskReviewInput, signal: AbortSignal): Promise<RiskReviewOutcome>;
+  /** Runs regardless of critic.mode; draws only from the reserved integrity budget. */
+  integrityReview(input: IntegrityReviewInput, signal: AbortSignal): Promise<IntegrityReviewOutcome>;
 }

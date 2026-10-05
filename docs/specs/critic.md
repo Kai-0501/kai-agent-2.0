@@ -1,23 +1,28 @@
 # Spec: Selective Independent Critic
 
 - Package: `packages/core` (`critic/`)
-- Research: [OpenHands critics](../research/upstream/openhands.md), [synthesis §2.6](../research/synthesis.md#26-the-critic-is-the-most-expensive-mechanism-so-it-is-the-most-selective)
-- Amended by: [ADR-0020](../adr/0020-openai-responses-and-profile.md) (evidence-bound findings, blocking vs advisory, stopping), [ADR-0016](../adr/0016-robustness-amendments.md) (review obligations survive budgets)
+- Decisions: [ADR-0009](../adr/0009-verification-architecture.md), amended by [ADR-0016](../adr/0016-robustness-amendments.md) and [ADR-0020](../adr/0020-openai-responses-and-profile.md) (evidence-bound `risk_review` findings, blocking vs advisory, profile stopping policy)
 - Profile policies: [harness profiles](harness-profiles.md#review-and-stopping-policy)
+- Research: [OpenHands critics](../research/upstream/openhands.md), [synthesis §2.6](../research/synthesis.md#26-the-critic-is-the-most-expensive-mechanism-so-it-is-the-most-selective)
 
 ## Responsibility
 
-For **higher-risk work, after deterministic verification has passed**, run a fresh-context
-review that looks for defects deterministic checks cannot see: logic errors, security issues,
-concurrency hazards, unhandled cases, unjustified test changes, and API contract breaks. Return
-**evidence-cited findings**.
+Run fresh-context reviews that look for defects deterministic checks cannot see, and return
+**evidence-cited findings**. The critic has two modes with **different obligations**:
+
+| Mode | Purpose | Optional? | If it cannot run or the budget is exhausted |
+|---|---|---|---|
+| **`risk_review`** | Logic, security, concurrency, error-handling, API-contract and requirements defects in risky changes | **Yes**: risk-triggered, skippable | Skipped. The task may still be `verified` on deterministic evidence. The report lists the unreviewed risk triggers |
+| **`integrity_review`** | Confirm that a **contract-backed**, high-severity test or verification change is consistent with the cited user requirement ([test-integrity-guard](test-integrity-guard.md#justification-and-review)) | **No**: required by the Guard when such a finding exists | The finding stays **unresolved**, which **blocks `verified`** until the user approves (interactive) or the task ends `blocked` (headless) |
 
 **Not responsible for:** style nits, re-running checks, or rewriting code. It reports; the
-worker fixes.
+worker fixes. The critic **never authorizes** relaxing a test or requirement. In
+`integrity_review` it can only confirm or reject consistency with user-owned contract text that
+the Guard has already verified as cited ([task-contract](task-contract.md)).
 
 ## Triggers
 
-The critic runs at gate step 9 only if **at least one** trigger fires (configurable) and
+**`risk_review`** runs at gate step 9 only if **at least one** trigger fires (configurable), and
 `critic.mode != "off"`:
 
 | Trigger | Source |
@@ -30,138 +35,155 @@ The critic runs at gate step 9 only if **at least one** trigger fires (configura
 | New dependency | Firewall F5 |
 | Diff > 400 changed lines or > 8 files | Diff stat |
 | Repair attempts ≥ 4, or any replan | Repair Controller |
-| Integrity findings that are `needs_review` or high severity | Test Integrity Guard |
 | User request (`--critic=always`) | Config |
 
-`critic.mode`: `auto` (default), `always`, or `off`.
+**`integrity_review`** runs at gate step 7, once per batch of contract-backed high-severity
+integrity findings. It runs **regardless of `critic.mode`** when its own switch,
+`critic.integrityReview`, is on (the default). If that switch is off, every such finding needs
+user approval instead. It is never silently skipped.
 
-## Review obligations
+`critic.mode` (risk review only): `auto` (default), `always`, or `off`.
 
-Some reviews are **required**, not optional. A **review obligation** is opened by:
-
-- the Test Integrity Guard for any high-severity (I6, I11, I13) or `needs_review` finding
-  ([test-integrity-guard](test-integrity-guard.md#justification-protocol));
-- a risk trigger the user marked required (`critic.requiredTriggers`, e.g. `auth_paths`).
-
-```ts
-interface ReviewObligation {
-  id: string; taskId: TaskId;
-  kind: "integrity" | "user_required_trigger";
-  source: string;                       // finding ID or trigger name
-  status: "open" | "discharged_critic" | "discharged_user";
-}
-```
-
-An obligation is discharged only by (a) a critic review whose input included the obligation's
-evidence and whose output passed validation and contains no unresolved blocking finding on it,
-or (b) the user's explicit approval (`permission.respond` to `kind="integrity"`). **Budget
-exhaustion, a failed critic call, an unavailable route or a profile without structured review
-never discharge an obligation.** With an obligation still open, the task cannot be `verified`;
-it ends `implemented_unverified` with the obligation listed and a pending approval request.
-
-## Inputs: the evidence bundle (no worker history)
+## Inputs (no worker history in either mode)
 
 ```ts
-interface CriticInput {
-  objective: string;
-  acceptanceCriteria: string[];
-  constraints: string[];
+interface RiskReviewInput {
+  contract: TaskContract;             // user-owned requirements, verbatim (not model restatements)
   diff: string;                       // unified, task-start checkpoint → now; truncated per file if huge (with artifact ref)
   changedSymbols: SymbolCard[];       // before/after signatures for changed exported symbols
   context: { path: string; excerpt: string }[];  // callers of changed public symbols (≤ 10), selected by index
   verification: EvidenceBundle;       // what passed, what was pre-existing
-  integrity: IntegrityFinding[];      // with justifications
+  integrity: IntegrityFinding[];      // with their resolution status
   triggers: string[];                 // why the critic is running
+}
+
+interface IntegrityReviewInput {
+  findings: IntegrityFinding[];       // contract-backed, high-severity
+  testDiff: string;                   // only the test / verification-config hunks involved
+  citedEntries: ContractEntry[];      // the verbatim contract entries cited (+ task-start instruction files if cited)
+  changedProductionSymbols: { card: SymbolCard; diff: string }[];
 }
 ```
 
-Size target: ≤ 20k tokens. Diffs over budget are reviewed **per file group**, with up to 3
-critic calls, each with the shared header.
+Size targets: `risk_review` ≤ 20k tokens; diffs over budget are reviewed **per file group**
+with up to 3 calls, each with the shared header. `integrity_review` ≤ 6k tokens per batch.
 
 ## Execution
 
-- A fresh interaction (new chain, or stateless), `purpose: "critic"`. The Governor picks
-  `high` or `medium` by risk.
+- A fresh interaction (new chain, or stateless), `purpose: "critic"`. The Governor picks `high`
+  for `integrity_review` and for high-risk `risk_review`, otherwise `medium`.
 - **Tools:** read-only (`read_file`, `read_symbol`, `grep_search`, `read_artifact`, plus
   `code_intel` if active), enforced with `allowed_tools`, or by declaring only those tools when
-  the snapshot marks `allowedToolsRestriction` unsupported. At most 8 tool turns.
-- **Output** is submitted through a `submit_review(findings[])` function declared only for the
-  critic. It is not done through `response_format`, because combining structured output with
-  function calling in one interaction has not been verified for Interactions. Each finding:
+  the route's snapshot marks `allowedToolsRestriction` unsupported. At most 8 tool turns for
+  `risk_review` and 3 for `integrity_review`. A profile whose snapshot lacks reliable
+  structured output (`structuredReview` not supported) skips `risk_review` (reported) and leaves
+  integrity findings unresolved for the user; it never treats them as consistent.
+- **Output** goes through a function declared only for the critic: `submit_review(findings[])`
+  in `risk_review`, and `submit_integrity_verdicts(verdicts[])` in `integrity_review`. It is
+  not done through `response_format`, because combining structured output with function calling
+  in one interaction has not been verified for Interactions.
 
 ```ts
-interface CriticFinding {
+interface CriticFinding {                        // risk_review
   severity: "blocking" | "major" | "minor";
-  category: "logic" | "security" | "concurrency" | "error_handling" | "api_contract" | "tests"
-          | "requirements" | "integrity";
+  category: "logic" | "security" | "concurrency" | "error_handling" | "api_contract" | "tests" | "requirements";
   path: string; line?: number;
-  requirementRef?: string;       // "AC2", "objective", "constraint:…", or an obligation ID
   claim: string;                 // what is wrong
   evidence: string;              // quoted code (must match the file) and reasoning
+  contractEntryId?: string;      // required for category "requirements": which user requirement is violated
   impact?: string;               // what goes wrong for whom
-  reproduction?: { kind: "test" | "command"; command: string[] };  // must fail now to confirm
-  suggestedCheck?: string;       // legacy alias of reproduction (free text)
+  reproduction?: { kind: "test" | "command"; command: string[] };  // run by Kai; must FAIL now to confirm
+  suggestedCheck?: string;       // free-text alternative to reproduction (not executed)
 }
 
-type FindingDisposition =
+type FindingDisposition =        // risk_review, recorded per finding
   | "blocking_confirmed"         // its reproduction was run and failed now
-  | "blocking_validated"         // exempt category (security, concurrency, api_contract, integrity) with location, requirement/impact and quote
-  | "advisory_preference"        // no violated requirement and no concrete defect
+  | "blocking_validated"         // exempt category (security, concurrency, api_contract) with valid location, quote and contract entry or impact
+  | "advisory_preference"        // no violated contract entry and no concrete defect
   | "unverified_claim"           // quote or location does not exist
   | "not_reproduced"             // reproduction passed: the claimed defect did not show
   | "duplicate"                  // same fingerprint as an earlier finding, code unchanged
   | "resolved";                  // fixed in a later round
+
+interface IntegrityVerdict {                     // integrity_review
+  findingId: string;
+  verdict: "consistent" | "inconsistent";
+  contractQuote: string;         // must occur verbatim in a cited entry
+  codeQuote: string;             // must occur in the test diff or changed production code
+  reasoning: string;
+}
 ```
 
-- **Evidence validation (deterministic).** Every `blocking` finding's `path:line` must exist,
-  and its quoted code must occur in the current file (whitespace-normalized); otherwise
-  `unverified_claim` (downgraded to `minor`). **Quote matching proves the code exists, not that
-  the diagnosis is right**, so a blocking finding additionally needs either a `reproduction`
-  that Kai runs (through the normal command policy, as a T3-style check) and that **fails** now,
-  or an exempt category (`security`, `concurrency`, `api_contract`, `integrity`) with a
-  `requirementRef` or `impact`. A reproduction that passes gives `not_reproduced` (minor).
-  A blocking finding with neither a violated requirement nor a concrete defect is
-  `advisory_preference`.
+- **Evidence validation (deterministic).**
+  - `risk_review`: every `blocking` finding's `path:line` must exist, and its quoted code must
+    occur in the current file (whitespace-normalized). `requirements` findings must name a real
+    contract entry. Findings that fail are **downgraded to `minor`** and marked
+    `unverified_claim`.
+  - `integrity_review`: a `consistent` verdict counts only if both quotes validate. A verdict
+    that fails validation counts as **unavailable** (unresolved, so the user decides). It is
+    never treated as consistent.
+- **Blocking needs more than a quote** (`risk_review`). Quote matching proves the code exists,
+  not that the diagnosis is right. A blocking finding also needs either a `reproduction` that Kai
+  runs (through the normal command policy, as a T3-style check) and that **fails** now, or an
+  exempt category (`security`, `concurrency`, `api_contract`) with a `contractEntryId` or an
+  `impact`. A reproduction that passes gives `not_reproduced` (minor). A blocking finding that
+  names neither a violated contract entry nor a concrete defect is `advisory_preference`.
 - **Deduplication:** fingerprint = `(path, enclosing symbol, category, normalized claim)`. A
   finding with the fingerprint of an earlier disposition is `duplicate` unless the code at its
   location changed since.
-- Confirmed or validated blocking findings → `verification_failed`. They are delivered to the
-  worker as repair items (counted against the repair budget) with their reproduction. Advisory,
-  major and minor findings go into the final report and **never** become repair items.
-- After the worker addresses blocking findings and the gate passes again, the critic **re-runs
-  only on the files that changed since its last review** (incremental): at most twice per task by
-  default, once for the `openai` profile ([profile policy](harness-profiles.md#review-and-stopping-policy)).
-- **Stopping:** required checks passing with no open obligation and no confirmed blocking
-  finding is a stopping condition. Optional review does not start a new round for advisory
-  findings.
+- Confirmed or validated blocking `risk_review` findings → `verification_failed`. They are
+  delivered to the worker as repair items (counted against the repair budget), with their
+  reproduction. Advisory, major and minor findings go into the final report and **never**
+  become repair items.
+- `inconsistent` integrity verdicts → the finding stays unresolved, and the worker is told the
+  change is not backed by the requirement (a repair item: restore the test or get user
+  approval).
+- After the worker addresses blocking findings and the gate passes again, `risk_review`
+  **re-runs only on the files that changed since its last review** (incremental): at most twice
+  per task by default, once for the `openai` profile
+  ([profile policy](harness-profiles.md#review-and-stopping-policy)).
+- **Stopping:** required checks passing with no unresolved integrity finding and no confirmed
+  blocking finding is a stopping condition. Optional review never starts a new round for
+  advisory findings.
 
-## Budget
+## Modes and budgets
 
-`critic.maxTokensPerTask` (default 60k total input + output across critic calls). Required
-reviews (open obligations) run first. If the budget is exceeded, the critic stops and the report
-says *"critic budget exhausted"*. If only **optional** triggers remain unreviewed, the task can
-still be `verified` on deterministic evidence, and the report lists the unreviewed risk triggers.
-If any **obligation** is still open, the task is not `verified`
-([obligations](#review-obligations)).
+| Budget | Default | Applies to | On exhaustion |
+|---|---|---|---|
+| `critic.maxRiskReviewTokens` | 60k per task (input + output) | `risk_review` only | Stop the risk review. The report says *"risk review budget exhausted"* and lists the unreviewed triggers. The task **may still be `verified`**, unless a mandatory review is pending (below) |
+| `critic.integrityReviewTokens` | 20k per task, **reserved** | `integrity_review` only | Remaining findings are **unresolved**, which blocks `verified` until the user approves (interactive) or the task ends `blocked` with `integrity_review_required` (headless) |
+
+The two budgets are separate pools. **Risk review can never consume the integrity reserve**, so
+running out of optional review never removes a mandatory one. Provider errors and validation
+failures follow the same rule: optional review degrades to "skipped and reported", and mandatory
+review degrades to "unresolved, so the user decides". `critic.mode=off` skips only the risk
+review. `critic.integrityReview=false` makes every mandatory review unresolved, so the user
+decides each one.
 
 ## Telemetry
 
-Critic runs, triggers, tokens, findings by severity and category, validated vs unverified
-claims, blocking findings later confirmed (the worker changed code at that location and a test
-was added), and false-positive rate (from human review in the benchmark).
+Runs per mode, triggers, tokens per mode, findings by severity and category, validated vs
+unverified claims, integrity verdicts (consistent, inconsistent, unavailable), budget
+exhaustions per mode, blocking findings later confirmed (the worker changed code at that
+location and a test was added), and false-positive rate (from human review in the benchmark).
 
 ## Acceptance tests
 
-1. Low-risk task → the critic does not run.
+1. Low-risk task with no integrity findings → the critic does not run.
 2. An auth change with an introduced logic bug (fixture: inverted permission check, with tests
-   that do not cover it) → a blocking finding with a valid quote, and the task returns to repair.
+   that do not cover it) → a blocking `risk_review` finding with a valid quote, and the task
+   returns to repair.
 3. A critic claim quoting nonexistent code → downgraded to `unverified_claim`.
-4. Critic budget exhausted with only optional triggers left → the task is still verifiable, and
-   the report lists the unreviewed triggers.
-5. **Budget cannot clear an obligation:** an I11 (`mocked_sut`) high-severity finding opens an
-   obligation; the critic budget is exhausted before it is reviewed → final state
-   `implemented_unverified` with the open obligation and a pending `permission.request
-   kind="integrity"`; user approval then allows `verified`.
-6. A blocking `logic` finding whose reproduction passes → `not_reproduced`; a blocking style
+4. Risk-review budget exhausted and **no** pending integrity review → the task can still be
+   `verified`, and the report lists the unreviewed triggers.
+5. Risk-review budget exhausted **and** a contract-backed I6 finding pending → the
+   `integrity_review` still runs from its reserved budget.
+6. `critic.mode=off` alone, with a contract-backed I6 finding → `integrity_review` still runs.
+   `integrity_review` impossible (`critic.integrityReview=false`, or a provider outage) → the
+   finding is unresolved → headless final state is `blocked` (`integrity_review_required`),
+   never `verified`.
+7. An integrity verdict `consistent` whose `contractQuote` is not in the cited entry → treated as
+   unavailable (unresolved).
+8. A blocking `logic` finding whose reproduction passes → `not_reproduced`; a blocking style
    preference → `advisory_preference`; neither starts a repair round.
-7. A repeated finding with unchanged code in round 2 → `duplicate`, not shown to the worker.
+9. A repeated finding with unchanged code in round 2 → `duplicate`, not shown to the worker.

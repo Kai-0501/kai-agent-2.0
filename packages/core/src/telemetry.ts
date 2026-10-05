@@ -2,10 +2,11 @@
  * SCAFFOLD: types only. Not an implementation.
  *
  * Token & correctness telemetry. REPORTED (API usage) and ESTIMATED (Kai counterfactuals) are never mixed.
- * Spec: docs/specs/telemetry.md · Decision: docs/adr/0010.
+ * Estimated savings are shown as calibrated only while complete request accounting is healthy.
+ * Spec: docs/specs/telemetry.md · Decisions: docs/adr/0010, amended by docs/adr/0016.
  */
 import type { AppliedEffort, EffortLevel, EpochId, FinalTaskState, RouteId, SessionId, TaskId, TurnId, UsageClass } from "@kai/protocol";
-import type { ContextManifest, ContinuationMode } from "./context.js";
+import type { ContextManifest, ContinuationMode, PreflightResult } from "./context.js";
 import type { RequestPurpose } from "./governor.js";
 import type { TurnStatus, TurnUsage } from "./provider.js";
 
@@ -44,6 +45,10 @@ export interface TurnCounters {
   // context management
   readonly epochStarted: boolean;
   readonly contextMgmtTokens: number; // REPORTED usage of digest/critic calls
+  readonly preflightReshapes: number;
+  readonly preflightRollovers: number;
+  readonly instructionDeliveries: number;
+  readonly instructionGateRejections: number;
 }
 
 export interface TurnRecord {
@@ -64,7 +69,10 @@ export interface TurnRecord {
   readonly usage: TurnUsage; // REPORTED; fields may be null (unknown, never zero)
   readonly latency: { readonly ttftMs?: number; readonly totalMs: number };
   readonly status: TurnStatus;
-  readonly manifest: ContextManifest; // ESTIMATED per category
+  /** COMPLETE accounting (delta + composition), each category labelled reported | estimated; residual vs reported. */
+  readonly manifest: ContextManifest;
+  /** ESTIMATED projection that gated this request. */
+  readonly preflight: { readonly projected: number; readonly action: PreflightResult["action"] };
   readonly toolCalls: readonly { readonly name: string; readonly ok: boolean; readonly resultEstTokens: number }[];
   readonly counters: TurnCounters;
   /** Only for api_metered routes with a known price; plan usage is never $0. */
@@ -104,13 +112,18 @@ export interface TaskSummary {
   readonly usageTotals: UsageTotals; // REPORTED, with partial counts
   readonly costUsd: number | null;
   readonly estTokensSaved: { readonly ledger: number; readonly spooling: number; readonly toolExposureGross: number }; // ESTIMATED
+  /** Gates estTokensSaved: displayed as calibrated only when healthy (trailing 20 requests, mean |residual| ≤ 5%, no identity violations). */
+  readonly accounting: { readonly healthy: boolean; readonly meanAbsResidualPct: number; readonly identityViolations: number };
   readonly correctness: {
     readonly firstTxnCleanRate: number;
     readonly inventedSymbolRate: number; // hallucination-class findings per 100 changed lines
     readonly firewallRejects: number;
     readonly prematureCompletions: number;
     readonly integrityIncidents: number;
+    readonly integrityUnresolved: number;
     readonly criticBlocking: number;
+    readonly introducedIntermittent: number;
+    readonly recoveries: { readonly rolledForward: number; readonly rolledBack: number; readonly aborted: number; readonly conflicts: number };
   };
   readonly wallClockMs: number;
 }

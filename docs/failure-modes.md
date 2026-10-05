@@ -2,9 +2,11 @@
 
 For each failure mode: how Kai **detects** it, how it **contains** the damage, how it
 **recovers**, and the **residual risk**. Links point to the owning spec. Modes 1–15 are those
-required by the founding brief. Modes 16–28 were found during research. Modes 29–50 cover the
-release extension (routes, profiles, endpoints, learning, research, the macOS app) and the audit
-corrections; [cross-feature failures](#cross-feature-failure-behaviour) are at the end.
+required by the founding brief. Modes 16–28 were found during research. Modes 29–31 were added
+after design review 1 ([ADR-0015](adr/0015-user-owned-task-contract.md),
+[ADR-0016](adr/0016-robustness-amendments.md)), which also revised modes 5, 6, 13, 24 and 26.
+Modes 32–49 cover the release extension (routes, profiles, endpoints, learning, research, the
+macOS app); [cross-feature failures](#cross-feature-failure-behaviour) are at the end.
 
 Containment principle: **nothing the model produces reaches the worktree, the task verdict, or
 the next epoch's context without passing a deterministic gate.**
@@ -59,26 +61,36 @@ the next epoch's context without passing a deterministic gate.**
 
 ### 5. Failed partial edit (a crash or error mid-commit)
 
-- **Detect:** write or rename errors during commit, or a process crash between
-  `TransactionProposed` and `TransactionApplied`.
-- **Contain:** a durable **prepared manifest** (`TransactionPrepared`, with before and after
-  blobs) is committed before the first rename; temp-file-plus-rename per file; on a live failure,
-  the files already renamed are restored from before-blobs (`TransactionRolledBack`).
-- **Recover:** on restart, every prepared transaction without an outcome is resolved from its
-  manifest: all-before → abandoned, all-after → completed, mixed → rolled back, unknown hash →
-  conflict and block ([patch engine](specs/patch-engine.md#crash-recovery)).
-- **Residual:** a disk that lies about `fsync`. Recovery still never writes a path whose hash is
-  not in the manifest.
+- **Detect:** a `TransactionPrepared` journal record without a terminal record (`Applied`,
+  `Aborted`, `RolledBack`, `RecoveryConflict`), found at startup or after an in-process SWAP
+  failure.
+- **Contain:** **write-ahead journal** (invariant J1). Before any file is touched, the full
+  before- and after-images of every file, plus modes and swap order, are durable (blobs fsynced,
+  `synchronous=FULL` commit). Temps are staged and fsynced, and hashes re-verified, before the
+  first rename. Directories are fsynced after the swap
+  ([patch-engine](specs/patch-engine.md#commit-protocol-write-ahead-journal)).
+- **Recover:** deterministic, idempotent recovery from the journal and the disk only. All files
+  in their after-state → roll forward. None swapped → abort. Mixed → roll back to before-images.
+  Any file changed by someone else → touch nothing, and the task is `blocked`
+  (`recovery_conflict`) for the user to choose per file
+  ([crash recovery](specs/patch-engine.md#crash-recovery)). Verified by the crash-injection
+  matrix K1–K8.
+- **Residual:** a filesystem that lies about `fsync`. Covered by the nightly block-level
+  crash-simulation harness, and the workspace checkpoint (git ref) remains a second safety net.
 
 ### 6. Test manipulation (weakening tests to pass)
 
 - **Detect:** Test Integrity Guard detectors I1–I14, both per transaction (F8) and over the
   whole task diff at the gate ([guard](specs/test-integrity-guard.md)).
 - **Contain:** I4 (`.only`), I7 (trivialized assertions) and suppression of
-  hallucination-class diagnostics block. Other weakening needs a valid justification. High
-  severity or `needs_review` triggers the critic or user approval.
-- **Recover:** the model either justifies (when the behaviour change is legitimate and
-  requested) or restores the test.
+  hallucination-class diagnostics block. Other weakening is authorized **only** by a verified
+  quote of the user-owned Task Contract or by user approval. The model's own descriptions,
+  plans and claims never count. High-severity changes also need a **mandatory integrity
+  review** with a reserved budget. If it is unresolved, the task cannot be `verified`
+  ([guard](specs/test-integrity-guard.md#justification-and-review), [critic](specs/critic.md#modes-and-budgets)).
+- **Recover:** the model either cites the user requirement that calls for the change, or
+  restores the test. Otherwise the user decides (interactive), or the task ends `blocked`
+  (`integrity_review_required`) in headless runs.
 - **Residual:** subtle weakening the AST detectors miss (e.g. changing test *inputs* to avoid a
   bug path). The benchmark uses **hidden tests** that the agent cannot modify, which measures
   this residual.
@@ -154,10 +166,10 @@ the next epoch's context without passing a deterministic gate.**
 - **Detect:** on startup, a session without `SessionEnded`, dangling tool calls, or
   transactions proposed but not applied.
 - **Contain:** append-only events and atomic projections. Blobs are written before events.
-- **Recover:** synthesize interrupted tool results, run the transaction recovery check, run the
-  hash comparison for external changes, mark the task `blocked` with a recovery summary, and on
-  resume **start a new epoch** (the chained server state is treated as lost)
-  ([event model](specs/event-model.md#recovery)).
+- **Recover:** run **journal recovery first** (mode 5), then synthesize interrupted tool
+  results, run the hash comparison for external changes, mark the task `blocked` with a recovery
+  summary, and on resume **start a new epoch** whose brief reports the recovery outcomes (the
+  chained server state is treated as lost) ([event model](specs/event-model.md#recovery)).
 - **Residual:** a command interrupted mid-way may leave side effects (e.g. a partially
   installed `node_modules`). These are reported, not hidden.
 
@@ -248,24 +260,34 @@ the next epoch's context without passing a deterministic gate.**
 - **Recover:** the user fixes `.kai/project.json`. The final state is `implemented_unverified`
   rather than a false `verified`.
 
-### 24. Flaky tests, and new intermittent failures disguised as flaky
+### 24. Flaky tests, and introduced intermittent failures disguised as flakiness
 
-- **Contain:** a failure that passes on rerun is `flaky` only if the user-owned `knownFlaky`
-  list names it or it is intermittent **at baseline**; otherwise it is
-  `introduced_intermittent` and blocks ([verification](specs/verification-engine.md#lazy-baseline-classification)).
-  Flaky failures do not block, but they are reported.
-- **Residual:** an intermittency rare enough to pass every baseline and current run. The
-  benchmark's repeated hidden-test runs measure it.
+- **Risk:** a newly introduced race fails some of the time, so "passed on rerun" would let it
+  through.
+- **Contain:** a failure is non-blocking only if flakiness is **established at baseline**
+  (baseline reruns at the task-start checkpoint, or baseline-only flake history, without material
+  worsening) or covered by a **user-approved exception** (`knownFlaky`, or a per-task approval).
+  A failure that appears now while the baseline passed every run is `introduced_intermittent`,
+  and it **blocks**, with run counts shown to the model as a likely race, ordering or timing bug
+  ([verification](specs/verification-engine.md#lazy-baseline-classification)). Baseline
+  impossible → introduced.
+- **Residual:** rare baseline flakiness may be missed in 5 baseline runs and be labelled
+  introduced (fail closed). The user can approve an exception, and flake history accumulates.
 
 ### 25. Premature completion claim
 
 - **Contain:** `complete_task` only *requests* verification ([verification](specs/verification-engine.md)).
   The `premature_completion` counter tracks how often the model claims completion too early.
 
-### 26. Context budget exhaustion within one turn (a huge single file or result)
+### 26. Context budget exhaustion (a huge result, or many capped results in one batch)
 
-- **Contain:** outlines instead of large whole-file reads, per-line caps, the shaper cap, and the
-  hard epoch limit. The emergency window is never targeted, and reaching it raises an alarm.
+- **Contain:** outlines instead of large whole-file reads, per-line caps, and the per-item
+  shaper cap. Most importantly, a **request preflight** before every request projects the
+  complete next request: prior reported input, carried model output (and thoughts if
+  applicable), the whole pending batch and a calibrated margin. It enforces `ingressBatchMax`,
+  reshapes, or rolls over to a new epoch **before** sending, so no request exceeds the hard limit
+  ([preflight](specs/context-compiler.md#request-preflight)). The emergency limit is a hard
+  assertion.
 
 ### 27. Out-of-scope edits (touching unrelated files, mass reformatting)
 
@@ -278,37 +300,53 @@ the next epoch's context without passing a deterministic gate.**
 
 - **Contain:** blob dedup and compression, a retention policy, `kai gc`, and a free-space check
   before spooling large outputs (with streaming truncation and an explicit note when space is
-  low).
+  low). A PREPARE that cannot write its blobs fails *before* any file is touched (journal
+  invariant J1).
 
 ---
 
-### 29. The model narrows the task (objective or acceptance criteria)
+### 29. Requirement drift: the model rewrites its own requirements
 
-- **Detect/contain:** user criteria are immutable outside `task.amend`; `update_plan` has no
-  field for them; derived criteria are additive and labelled; integrity justifications must cite
-  user criteria ([ADR-0016](adr/0016-robustness-amendments.md)).
-- **Residual:** a model that does less than asked without touching the criteria is caught only
-  by checks and the critic against the user's criteria.
+- **Example:** the model "clarifies" the objective in its plan, narrows an acceptance criterion,
+  changes the test to match its implementation, and cites its own plan as the justification.
+- **Detect/contain:** requirements live in the user-owned **Task Contract** (verbatim,
+  append-only, amendable only by user-action protocol handlers). `update_plan` has no objective
+  or acceptance fields. Interpretations and proposed criteria are rendered as model-authored and
+  never authorize anything. Test and verification weakening needs a verified contract citation
+  or user approval ([task contract](specs/task-contract.md)).
+- **Recover:** the gate reports unbacked changes as integrity findings. The user decides, or the
+  task ends `blocked` in headless runs.
+- **Residual:** the model can still *misinterpret* an ambiguous requirement while implementing.
+  Hidden tests in the benchmark and the risk-review critic (which checks `requirements` against
+  contract entries) measure and mitigate this.
 
-### 30. Over-limit request on a small or stateless context
+### 30. Edits made before scoped project instructions are seen
 
-- **Detect/contain:** the request preflight sizes the complete pending request (including replay
-  items and batched results) with conservative estimates; re-shape → elide → new epoch → honest
-  `blocked {context_exhausted}` ([context compiler](specs/context-compiler.md#request-preflight)).
-- **Recover:** a provider context-length error recalibrates the estimator and retries once.
+- **Example:** `services/payments/AGENTS.md` says "all amounts are integer cents". The model's
+  first edit in that directory uses floats, before any read there has delivered the file.
+- **Detect/contain:** the **instruction map** is built at workspace open, and seeds include the
+  instruction files applicable to known task paths. The Patch Engine's **instruction gate**
+  refuses any transaction (and the shell runner any mutating command) on a path whose applicable
+  instruction files have not been delivered in the current epoch at their current hash. The
+  refusal delivers the text ([instruction gate](specs/patch-engine.md#instruction-gate)).
+- **Recover:** the model re-evaluates and resends. Nothing was written.
+- **Residual:** shell commands whose target paths cannot be determined from `cwd` and argv (e.g.
+  scripts writing elsewhere). Mitigated by the command policy and checkpoints, and fully covered
+  only with the future OS sandbox.
 
-### 31. Nested instructions seen too late
+### 31. Accounting drift makes savings claims wrong
 
-- **Contain:** the first mutation under a subtree with unseen instructions is withheld and the
-  instructions delivered; the model reconsiders before anything is written.
+- **Example:** model-generated history (large `replace` arguments) grows the context, but
+  calibration attributes the growth to tool-output estimates, so the dashboard over-reports
+  savings.
+- **Detect/contain:** **complete request accounting** sizes model-generated history from
+  reported usage. The estimator calibrates only on measured ingress. Accounting-identity
+  violations are flagged. Estimated savings are shown as calibrated only while the residual is ≤
+  5% ([accounting](specs/context-compiler.md#complete-request-accounting), [telemetry](specs/telemetry.md#accuracy-guards)).
+- **Residual:** an unverified provider assumption (G10). The identity check detects it and
+  triggers a re-probe.
 
-### 32. Mandatory review silently skipped
-
-- **Contain:** review obligations survive critic budgets, route failures and profiles without
-  structured review; the task ends `implemented_unverified` until a validated review or the user
-  discharges them ([critic](specs/critic.md#review-obligations)).
-
-### 33. OAuth sign-in attack or mix-up (CSRF, code injection, wrong account)
+### 32. OAuth sign-in attack or mix-up (CSRF, code injection, wrong account)
 
 - **Detect:** `state` (constant-time), PKCE `S256`, `nonce`, ID-token signature, issuer,
   audience and expiry checks; account-key match on re-sign-in; a single-path, single-attempt
@@ -317,7 +355,7 @@ the next epoch's context without passing a deterministic gate.**
   which carries no token).
 - **Residual:** malware running as the same user can read local memory; out of scope.
 
-### 34. Subscription quota exhausted (including mid-stream)
+### 33. Subscription quota exhausted (including mid-stream)
 
 - **Detect:** `429 subscription_sharing_usage_limit_exceeded`, at any point of a stream.
 - **Contain:** nothing from the failed turn executes; the route goes `quota_exhausted`; the task
@@ -325,50 +363,50 @@ the next epoch's context without passing a deterministic gate.**
   another provider ([credentials](specs/credentials.md#rules)).
 - **Recover:** the user resumes later or explicitly switches route.
 
-### 35. Refresh races and revoked access
+### 34. Refresh races and revoked access
 
 - **Contain:** single-flight refresh across processes with compare-and-swap of rotated tokens;
   `invalid_grant` → `reauth_required`; tasks pause.
 - **Residual:** a refresh token rotated by OpenAI while Kai was offline and then rejected
   requires a new sign-in; the UI says so.
 
-### 36. A stream fails after text or calls arrived
+### 35. A stream fails after text or calls arrived
 
 - **Contain:** success requires the terminal completion event; partial text is shown as
   interrupted and is not added to the epoch; no tool call from the attempt runs; the identical
   request is retried within limits ([OpenAI provider](specs/openai-responses-provider.md#streaming)).
 
-### 37. A request field the route does not accept
+### 36. A request field the route does not accept
 
 - **Contain:** allowlist request builders per route; a property test proves no disallowed key
   is emitted; an API error on an allowlisted key marks it unsupported and retries once without it.
 
-### 38. Malformed, incomplete or invented tool calls from a compatible endpoint
+### 37. Malformed, incomplete or invented tool calls from a compatible endpoint
 
 - **Contain:** fragments are assembled and validated whole (JSON, name, schema) after the stream
   finishes; invalid calls never execute; endpoints without reliable tool calling are
   `chat_only`; prose is never parsed as commands ([compatible endpoints](specs/compatible-endpoints.md#request-and-stream-handling)).
 
-### 39. Endpoint capability drift (config change, server upgrade, model swap)
+### 38. Endpoint capability drift (config change, server upgrade, model swap)
 
 - **Detect:** the snapshot cache key includes the config revision and adapter version; probe
   results are re-checked when error patterns change (context-length errors, schema errors).
 - **Contain:** a changed key invalidates the snapshot and requires a re-probe before the next
   agent task.
 
-### 40. Provider-native state crosses a boundary
+### 39. Provider-native state crosses a boundary
 
 - **Contain:** replay items are tagged `(provider, route, account, model)` and dropped on any
   mismatch; switches happen at safe points with a fresh epoch
   ([context compiler](specs/context-compiler.md#provider-and-route-switches)).
 
-### 41. Local-only work leaks to the cloud
+### 40. Local-only work leaks to the cloud
 
 - **Contain:** `local_only` privacy class on endpoints, projects and learning data; reflection on
   local-only packets runs only on local routes or waits; switching a local-only task to a cloud
   route needs an explicit privacy-change confirmation; workspace config can force local-only.
 
-### 42. Wrong, stale or harmful learned procedure
+### 41. Wrong, stale or harmful learned procedure
 
 - **Detect:** prerequisites (dependency ranges, paths, symbols) checked at retrieval;
   contradictions recorded deterministically or by retrospectives; followed-skill outcomes
@@ -378,27 +416,27 @@ the next epoch's context without passing a deterministic gate.**
 - **Recover:** retire, roll back to an earlier version, or disable; past task evidence and pinned
   snapshot hashes never change ([learning](specs/learning-service.md#skill-lifecycle)).
 
-### 43. Learning poisoning (web content, model claims, policy-weakening lessons)
+### 42. Learning poisoning (web content, model claims, policy-weakening lessons)
 
 - **Contain:** the policy linter rejects lessons that skip or weaken checks, touch integrity
   policy, permissions, objectives or runtime code; evidence refs must resolve to verified
   outcomes or recorded failures; web-only provenance is clamped to repository scope; wider
   scope needs repeated evidence or controlled evaluation.
 
-### 44. Duplicate or lost learning jobs across two stores
+### 43. Duplicate or lost learning jobs across two stores
 
 - **Contain:** the outbox row commits with `ProjectFinalized`; job IDs are derived from
   `(project, generation, kind)`; delivery is at-least-once with idempotent insert; leases
   prevent two runtimes from running one job; a startup sweep repairs Markdown projections.
 
-### 45. Chrome missing, invalid, locked or crashing
+### 44. Chrome missing, invalid, locked or crashing
 
 - **Contain:** typed `ChromeStatus`; research tools are not declared unless Chrome is ready;
   coding continues; crashes fail only the current operation; repeated crashes mark Chrome
   `unstable` for a cool-down; only Kai's own orphaned Chrome (matched by its profile path) is
   ever terminated ([Chrome research](specs/chrome-research.md#browser-ownership-and-lifecycle)).
 
-### 46. Search-engine change, CAPTCHA or consent wall
+### 45. Search-engine change, CAPTCHA or consent wall
 
 - **Detect:** semantic SERP parsing with versioned fixtures; typed outcomes
   (`parse_failed` is never `no_results`; `captcha`, `consent_required`).
@@ -407,7 +445,7 @@ the next epoch's context without passing a deterministic gate.**
 - **Residual:** research is unavailable while the engine blocks; the model is told to proceed
   and state what is unverified.
 
-### 47. Web prompt injection
+### 46. Web prompt injection
 
 - **Contain:** web text is sanitized and wrapped as untrusted data; objectives are immutable;
   permissions change only via KSP; research tools are read-oriented; web-derived lessons cannot
@@ -415,7 +453,7 @@ the next epoch's context without passing a deterministic gate.**
 - **Residual:** a page can still mislead the model's technical judgement; installed
   declarations outrank web facts, and checks verify the result.
 
-### 48. Browser SSRF or data exfiltration to local or metadata addresses
+### 47. Browser SSRF or data exfiltration to local or metadata addresses
 
 - **Contain:** a filtering proxy resolves and pins addresses, refusing private, loopback,
   link-local and metadata ranges; QUIC and non-proxied WebRTC are disabled; non-HTTP(S) schemes
@@ -424,7 +462,7 @@ the next epoch's context without passing a deterministic gate.**
 - **Residual:** future browser transports that bypass the proxy; the smoke suite's loopback
   canary detects regressions.
 
-### 49. Unsupported or stale web claims presented as current
+### 48. Unsupported or stale web claims presented as current
 
 - **Contain:** snippets are never evidence; dates carry provenance; cached pages show their age
   and never count as fresh; citations must resolve to delivered excerpts; time-sensitive notes
@@ -432,7 +470,7 @@ the next epoch's context without passing a deterministic gate.**
 - **Residual:** Kai verifies that a cited passage exists and was read, not that it supports the
   claim; the UI links each citation to its excerpt for human judgement.
 
-### 50. Endless review or cosmetic rework
+### 49. Endless review or cosmetic rework
 
 - **Contain:** blocking findings need a violated requirement or a reproduced or validated
   defect; advisory findings never become repair items; duplicates are suppressed; optional

@@ -1,11 +1,13 @@
 /**
  * SCAFFOLD: types only. Not an implementation.
  *
- * Patch Engine: transactions on an overlay, strict matching (no fuzzy), ledger version checks,
- * atomic commit with rollback and reverse patches.
- * Spec: docs/specs/patch-engine.md · Decision: docs/adr/0007.
+ * Patch Engine: instruction gate, transactions on an overlay, strict matching (no fuzzy), ledger
+ * version checks, and a WRITE-AHEAD JOURNAL (PREPARE → STAGE → VERIFY → SWAP → COMMIT) with a
+ * deterministic, idempotent crash-recovery procedure.
+ * Spec: docs/specs/patch-engine.md · Decisions: docs/adr/0007, amended by docs/adr/0016.
  */
 import type { CheckpointId, ContentHash, LineRange, ToolCallId, TransactionId, TurnId } from "@kai/protocol";
+import type { UserActionToken } from "./contract.js";
 import type { FirewallReport } from "./firewall.js";
 
 export type EditOp =
@@ -51,39 +53,52 @@ export interface MatchResult {
   readonly candidates?: readonly { readonly range: LineRange; readonly text: string; readonly similarity: number }[];
 }
 
+/** Rejections happen before PREPARE: nothing was written. */
 export type RejectReason =
+  | "instructions_pending" // applicable instruction files not yet delivered this epoch (text returned with the rejection)
   | "not_found"
   | "ambiguous"
   | "stale_view"
   | "firewall"
-  | "external_change"
   | "noop"
-  | "invalid_path"
-  | "instructions_pending"; // unseen nested instructions: withheld once, model reconsiders (docs/adr/0016)
+  | "invalid_path";
 
-/** Durable intent committed (TransactionPrepared) before the first rename (docs/specs/patch-engine.md#commit-protocol). */
-export interface PreparedManifest {
+/** The write-ahead journal record (TransactionPrepared). Everything needed to finish OR undo the transaction. */
+export interface PreparedTransaction {
   readonly txnId: TransactionId;
+  readonly checkpointId?: CheckpointId;
+  /** Paths in the exact order SWAP processes them. */
+  readonly order: readonly string[];
   readonly files: readonly {
     readonly path: string;
-    readonly op: "write" | "create" | "delete" | "rename_from" | "rename_to";
-    readonly beforeHash: ContentHash | null;
-    readonly afterHash: ContentHash | null;
-    readonly beforeBlob: ContentHash | null;
-    readonly afterBlob: ContentHash | null;
-    readonly tempPath?: string;
+    readonly op: "create" | "modify" | "delete"; // a rename is a delete of `from` plus a create of `to`
+    readonly beforeHash: ContentHash | null; // null = did not exist
+    readonly beforeBlob: ContentHash | null; // full pre-image (null only for create)
+    readonly afterHash: ContentHash | null; // null = must not exist afterwards
+    readonly afterBlob: ContentHash | null; // full post-image (null only for delete)
     readonly mode: number;
+    readonly tempName: string; // ".<name>.kai-tmp-<txnId>-<n>", same directory
   }[];
-  readonly order: readonly string[];
+  readonly reversePatchBlob: ContentHash;
 }
 
-/** Restart recovery of a prepared transaction without an outcome (docs/specs/patch-engine.md#crash-recovery). */
-export type RecoveryOutcome = "completed" | "rolled_back" | "abandoned" | "conflict";
+/** Per-file disk state during recovery. */
+export type RecoveryFileState = "AFTER" | "BEFORE" | "FOREIGN";
+
+export type RecoveryOutcome =
+  | { readonly txnId: TransactionId; readonly action: "rolled_forward" } // every file AFTER
+  | { readonly txnId: TransactionId; readonly action: "aborted" } // every file BEFORE
+  | { readonly txnId: TransactionId; readonly action: "rolled_back"; readonly restored: readonly string[] } // AFTER/BEFORE mix
+  | { readonly txnId: TransactionId; readonly action: "conflict"; readonly foreign: readonly string[] }; // touch nothing; user decides
+
+export type RecoveryChoice = { readonly path: string; readonly choice: "keep_disk" | "restore_before" | "restore_after" };
 
 export interface TransactionResult {
   readonly txnId: TransactionId;
-  readonly status: "applied" | "rejected" | "rolled_back";
+  /** aborted = external change detected at VERIFY; nothing was swapped. */
+  readonly status: "applied" | "rejected" | "aborted" | "rolled_back";
   readonly rejectReason?: RejectReason;
+  readonly abortReason?: "external_change";
   readonly perCall: readonly { readonly toolCallId: ToolCallId; readonly message: string; readonly hunk?: string; readonly isError: boolean }[];
   readonly firewall?: FirewallReport;
   readonly checkpointId?: CheckpointId;
@@ -91,10 +106,16 @@ export interface TransactionResult {
 }
 
 export interface PatchEngine {
-  /** Build overlay → match → ledger version check → firewall → checkpoint → hash check → atomic commit. */
+  /**
+   * Instruction gate → overlay → match → ledger version check → firewall → checkpoint →
+   * PREPARE (durable journal) → STAGE → VERIFY → SWAP → COMMIT marker. Invariant J1: no file
+   * changes before PREPARE is durable.
+   */
   apply(txn: ProposedTransaction, signal: AbortSignal): Promise<TransactionResult>;
-  /** Apply the stored reverse patch if files still match afterHash; else 3-way merge or refuse. */
+  /** A journaled transaction toward the before-images; refuses (or 3-way merges) if files moved on. */
   rollback(txnId: TransactionId): Promise<{ readonly ok: boolean; readonly conflicts?: readonly string[] }>;
-  /** Startup: resolve every TransactionPrepared without TransactionApplied/RolledBack from its manifest. */
-  recover(signal: AbortSignal): Promise<readonly { readonly txnId: TransactionId; readonly outcome: RecoveryOutcome; readonly paths: readonly string[] }[]>;
+  /** Startup (before any other workspace work) and `kai recover`. Deterministic, idempotent; reads only journal + disk. */
+  recover(): Promise<readonly RecoveryOutcome[]>;
+  /** recovery.resolve (user action only): apply per-file choices for a RecoveryConflict. */
+  resolveConflict(token: UserActionToken, txnId: TransactionId, choices: readonly RecoveryChoice[]): Promise<void>;
 }

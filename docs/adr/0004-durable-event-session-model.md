@@ -1,6 +1,6 @@
 # ADR-0004: Durable event and session model
 
-- Status: Proposed
+- Status: Proposed. Amended by [ADR-0016](0016-robustness-amendments.md).
 - Date: 2026-10-05
 - Related: [specs/event-model.md](../specs/event-model.md), [research/upstream/openhands.md](../research/upstream/openhands.md), [research/upstream/pi.md](../research/upstream/pi.md), [ADR-0010](0010-telemetry.md)
 
@@ -40,6 +40,10 @@ not be the system of record.
   and this is a tested invariant.
 - **Blobs** (file snapshots, tool outputs, large payloads) are content-addressed (SHA-256) in a
   `blobs/` directory next to the DB, zstd-compressed. Events refer to them by hash.
+- *Amended by [ADR-0016](0016-robustness-amendments.md) (R3):* WAL with `synchronous=NORMAL`
+  for ordinary appends, but the `TransactionPrepared` journal commit (and any commit that must
+  survive power loss before an external side effect) uses `synchronous=FULL`. Startup runs
+  transaction recovery before any other work.
 - **Model context is a projection.** Only the Context Compiler turns durable state into model
   input. Every model request is recorded as a `ModelRequest` event that stores the exact compiled
   input or a manifest pointing to blobs, the tool declarations hash and the generation config, so

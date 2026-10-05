@@ -1,12 +1,12 @@
 /**
  * SCAFFOLD: types only. Not an implementation.
  *
- * Verification Engine: task state machine, profile, tiers, completion gate, lazy baselines,
- * baseline-backed flaky classification, review obligations.
- * Spec: docs/specs/verification-engine.md · Decisions: docs/adr/0009, docs/adr/0016.
+ * Verification Engine: task state machine, profile, tiers, completion gate, lazy baselines.
+ * Flakiness is ESTABLISHED-ONLY: "passed on rerun" is never evidence by itself.
+ * Spec: docs/specs/verification-engine.md · Decisions: docs/adr/0009, amended by docs/adr/0016.
  */
-import type { ArtifactId, FinalTaskState, TaskId } from "@kai/protocol";
-import type { CriticFinding, FindingDisposition, ReviewObligation } from "./critic.js";
+import type { ArtifactId, BlockedReason, ContentHash, FailureClassification, FinalTaskState, RunCounts, TaskId } from "@kai/protocol";
+import type { CriticFinding, FindingDisposition, IntegrityVerdict } from "./critic.js";
 import type { IntegrityFindingRecord } from "./integrity.js";
 
 export type Tier = "T0" | "T1" | "T2" | "T3" | "T4";
@@ -37,18 +37,25 @@ export interface VerificationProfile {
   readonly ignorePaths?: readonly string[];
   readonly firewall?: { readonly allowUnresolved?: readonly string[] };
   readonly baselineSetup?: readonly string[];
-  /** User-owned. A model edit adding entries is an integrity finding (I13). */
-  readonly knownFlaky?: readonly string[];
+  /** User-approved exceptions only; model edits to this list are Integrity Guard I13. */
+  readonly knownFlaky?: readonly KnownFlakyEntry[];
 }
 
-/** introduced_intermittent: passes on rerun now, but stable at baseline → blocks (docs/adr/0016). */
-export type FailureClassification = "introduced" | "introduced_intermittent" | "pre_existing" | "flaky";
+export interface KnownFlakyEntry {
+  readonly testId: string;
+  readonly reason: string;
+  readonly addedBy: "user";
+  readonly addedAt: string;
+  readonly expires?: string; // default: 90 days
+}
 
 export interface CheckResult {
   readonly id: string;
   readonly tier: Tier;
   readonly status: "pass" | "fail" | "skipped" | "error";
   readonly classification?: FailureClassification;
+  /** Shown in the report (e.g. "now 1/5 failed, baseline 0/5"). */
+  readonly runs?: { readonly now: RunCounts; readonly baseline?: RunCounts };
   readonly artifactId?: ArtifactId;
   readonly summary: string;
   readonly fingerprints: readonly string[];
@@ -61,23 +68,26 @@ export interface EvidenceBundle {
   readonly finalState: FinalTaskState;
   readonly checks: readonly CheckResult[];
   readonly diffStat: { readonly files: number; readonly insertions: number; readonly deletions: number };
+  /** What the task was graded against (user-owned). */
+  readonly contract: { readonly version: number; readonly hash: ContentHash };
+  readonly criteriaCoverage?: readonly { readonly entryId: string; readonly checks: readonly string[] }[];
   readonly integrity: readonly IntegrityFindingRecord[];
   readonly critic?: {
-    readonly ran: boolean;
-    readonly triggers: readonly string[];
-    readonly findings: readonly CriticFinding[];
-    readonly dispositions: readonly FindingDisposition[];
+    readonly riskReview: { readonly ran: boolean; readonly skippedReason?: string; readonly triggers: readonly string[]; readonly findings: readonly CriticFinding[]; readonly dispositions: readonly FindingDisposition[] };
+    readonly integrityReview?: { readonly ran: boolean; readonly verdicts: readonly IntegrityVerdict[] };
   };
-  readonly reviewObligations: readonly ReviewObligation[];
-  /** What the task was verified against: user criteria (authoritative) and model-derived additions. */
-  readonly acceptance: { readonly user: readonly string[]; readonly derived: readonly string[] };
+  readonly blockedReason?: BlockedReason;
   readonly unverifiedReasons?: readonly string[];
 }
 
 export type GateOutcome =
   | { readonly verdict: "verified"; readonly evidence: EvidenceBundle }
   | { readonly verdict: "verification_failed"; readonly evidence: EvidenceBundle; readonly repairItems: readonly string[] }
-  | { readonly verdict: "implemented_unverified"; readonly evidence: EvidenceBundle };
+  | { readonly verdict: "implemented_unverified"; readonly evidence: EvidenceBundle }
+  /** e.g. unresolved mandatory integrity review in a headless run. Never `verified`. */
+  | { readonly verdict: "blocked"; readonly reason: BlockedReason; readonly evidence: EvidenceBundle }
+  /** Interactive: waiting on a user decision (integrity approval or verification exception). */
+  | { readonly verdict: "needs_approval"; readonly requests: readonly { readonly kind: "integrity" | "verification_exception"; readonly findingOrTestId: string }[]; readonly evidence: EvidenceBundle };
 
 export interface VerificationEngine {
   /** The only code path that can produce a "verified" task state (AGENTS.md invariant 2). */

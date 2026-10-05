@@ -9,7 +9,7 @@ getting worse.**
 > architecture, decision records, subsystem specifications, a failure-mode analysis, an
 > evaluation plan and a **types-only scaffold**. The implementation is planned in
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). The R1 release scope (below) was added by
-> [ADR-0017](docs/adr/0019-release-scope-macos-multi-provider.md).
+> [ADR-0017](docs/adr/0017-release-scope-macos-multi-provider.md).
 
 ## Why
 
@@ -45,18 +45,21 @@ learns procedures from verified outcomes rather than from the model's opinion of
 
 | | Mechanism | Effect |
 |---|---|---|
+| 📜 | **User-owned Task Contract** | The user's requirements are stored verbatim and can be amended only by the user. The model cannot rewrite the exam: weakening a test needs a quote of the user's words or the user's approval |
 | 🧾 | **Read Ledger** | Knows what source the model has seen (path, range, hash, epoch). Unchanged content is never re-sent, and stale views are detected |
 | 📦 | **Artifact spooling** | Full outputs are stored. The model gets parsed summaries and excerpts, and can query the rest on demand |
-| 🧭 | **Context Compiler with epochs and preflight** | Budgeted, cache-friendly seeds from durable state; every request sized before it is sent, for 1M-token and 32k-token windows alike |
+| 🧭 | **Context Compiler with epochs** | Budgeted, cache-friendly seeds compiled from durable state, with deterministic epoch briefs. Every request is **preflighted** (never sent above the limit, for 1M-token and 32k-token windows alike) and **fully accounted**, including model-generated history |
 | 🗺️ | **Repo map and symbol tools** | tree-sitter + PageRank map, symbol cards, `read_symbol`: search → resolve → narrow read |
-| 🧱 | **Hallucination Firewall** | Rejects invented symbols, members and imports, parse errors and omission placeholders **before** they are written |
+| 🧱 | **Hallucination Firewall** | Rejects invented symbols, members and imports, parse errors and omission placeholders **before** they are written, and lists what really exists |
+| 🗂️ | **Instruction gate** | Nested `AGENTS.md`-style rules are discovered up front. No edit lands in a directory until its rules are in the model's context |
+| 💾 | **Journaled transactions** | Multi-file edits are all-or-nothing, with a write-ahead journal and deterministic crash recovery |
 | 📚 | **API Reality Checker** | Library API facts from the installed versions' declarations, not from model memory or the web |
-| ✅ | **Verification Engine** | Tiered checks, baseline-aware failures, an explicit state machine. "Done" means `verified` with evidence, on every route |
-| 🧪 | **Test Integrity Guard** | Detects skipped, deleted, weakened or suppressed tests; mandatory reviews cannot be budgeted away |
+| ✅ | **Verification Engine** | Tiered checks, baseline-aware failures, an explicit state machine. "Done" means `verified` with evidence, on every route. "Passed on rerun" never excuses a new intermittent failure |
+| 🧪 | **Test Integrity Guard** | Detects skipped, deleted, weakened or suppressed tests and checks. Only the user's contract or the user can authorize them |
 | 🔁 | **Repair/Replan Controller** | Failure fingerprints stop retry loops. A clean replan happens in a fresh context |
 | 🧠 | **Reasoning Governor + profiles** | Effort per request from phase, risk and observed difficulty, mapped to each model's own levels |
-| 🔍 | **Evidence-bound critic** | Blocking findings need a violated requirement or a reproduced defect; style preferences never trigger rework |
-| 📊 | **Telemetry** | Reported vs estimated vs unknown tokens; usage by purpose and route class (API spend, plan usage, local compute) |
+| 🔍 | **Selective critic** | Optional `risk_review` with evidence-bound blocking findings (style preferences never trigger rework); **mandatory** `integrity_review` with a reserved budget |
+| 📊 | **Telemetry** | Reported vs estimated vs unknown tokens; complete accounting; usage by purpose and route class (API spend, plan usage, local compute) |
 
 ## Architecture at a glance
 
@@ -83,10 +86,10 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) for the full design and runtime flow.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | End-to-end architecture, components, flows, principles |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Phased roadmap with acceptance criteria, vertical slices and release gates |
 | [AGENTS.md](AGENTS.md) | Rules and workflow for coding agents implementing Kai |
-| [docs/research/](docs/research/) | Primary-source studies: Gemini API, 12 open-source projects, and the [release extension research](docs/research/extension-2026-10.md) |
-| [docs/adr/](docs/adr/) | 23 architecture decision records |
-| [docs/specs/](docs/specs/) | 26 subsystem specifications |
-| [docs/failure-modes.md](docs/failure-modes.md) | 50 failure modes and cross-feature failure behaviour |
+| [docs/research/](docs/research/) | Primary-source studies: Gemini API, 12 open-source projects, a comparison matrix, a synthesis, and the [release extension research](docs/research/extension-2026-10.md) |
+| [docs/adr/](docs/adr/) | 24 architecture decision records (including design-review amendments) |
+| [docs/specs/](docs/specs/) | 27 subsystem specifications |
+| [docs/failure-modes.md](docs/failure-modes.md) | 49 failure modes and cross-feature failure behaviour |
 | [docs/evaluation/](docs/evaluation/) | Benchmark plan (incl. profile, learning and research evaluations) and corpus design |
 | [docs/glossary.md](docs/glossary.md) | Terms used across the docs |
 | [packages/](packages/) | **Types-only scaffold** (not an implementation) |
@@ -95,13 +98,18 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) for the full design and runtime flow.
 
 - **TypeScript on Node.js 24**; first-party SDKs where they exist. [ADR-0001](docs/adr/0001-implementation-language-runtime.md)
 - **Append-only SQLite event log. Model context is a projection.** [ADR-0004](docs/adr/0004-durable-event-session-model.md)
-- **Epochs: budgeted seeds plus ingress control**, with a preflight on every request. [ADR-0005](docs/adr/0005-context-compiler-and-epochs.md), [ADR-0016](docs/adr/0018-robustness-amendments.md)
-- **Adapters, credential routes, harness profiles and capability snapshots are separate**; core branches on capabilities only. [ADR-0018](docs/adr/0020-providers-routes-profiles-capabilities.md)
-- **Sign in with ChatGPT through the documented open-source flow only**; no borrowed client IDs or private routes. [ADR-0019](docs/adr/0021-sign-in-with-chatgpt-route.md)
-- **Learning is per finalized project, deterministic in evidence and retrieval, and outcome-gated.** [ADR-0022](docs/adr/0024-shared-procedural-learning.md)
-- **Research drives the installed Chrome** through `playwright-core`, an app-owned profile and a filtering proxy. [ADR-0023](docs/adr/0016-chrome-research.md)
+- **Epochs: budgeted seeds plus ingress control**, with a preflight on every request. [ADR-0005](docs/adr/0005-context-compiler-and-epochs.md), [ADR-0016](docs/adr/0016-robustness-amendments.md)
+- **Adapters, credential routes, harness profiles and capability snapshots are separate**; core branches on capabilities only. [ADR-0018](docs/adr/0018-providers-routes-profiles-capabilities.md)
+- **Sign in with ChatGPT through the documented open-source flow only**; no borrowed client IDs or private routes. [ADR-0019](docs/adr/0019-sign-in-with-chatgpt-route.md)
+- **Learning is per finalized project, deterministic in evidence and retrieval, and outcome-gated.** [ADR-0022](docs/adr/0022-shared-procedural-learning.md)
+- **Research drives the installed Chrome** through `playwright-core`, an app-owned profile and a filtering proxy. [ADR-0023](docs/adr/0023-chrome-research.md)
 - **Electron shell, runtime in a separate process, KSP over `MessagePort`.** [ADR-0024](docs/adr/0024-macos-desktop-shell.md)
 - **Every mechanism must win in the benchmark** to stay on by default. [ADR-0014](docs/adr/0014-measurement-gated-mechanisms.md)
+- **The user owns the requirements**: a verbatim, append-only Task Contract that model plans
+  cannot change or override. [ADR-0015](docs/adr/0015-user-owned-task-contract.md)
+- **Gates fail closed**: established-only flakiness, journaled transactions with crash recovery,
+  request preflight, complete accounting, a pre-mutation instruction gate, and mandatory integrity
+  review that is never skipped for budget. [ADR-0016](docs/adr/0016-robustness-amendments.md)
 
 ## Non-goals (R1)
 
@@ -116,4 +124,4 @@ To be decided by the repository owner. Upstream projects studied here are used a
 inspiration only ([licensing summary](docs/research/README.md#licensing-summary)). The ChatGPT
 subscription route is documented for open-source projects, personal projects that run locally,
 and approved apps; Kai currently assumes **personal local use** only and does not change its
-licence or distribution on the owner's behalf ([ADR-0019](docs/adr/0021-sign-in-with-chatgpt-route.md)).
+licence or distribution on the owner's behalf ([ADR-0019](docs/adr/0019-sign-in-with-chatgpt-route.md)).

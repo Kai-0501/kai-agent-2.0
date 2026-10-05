@@ -29,7 +29,7 @@ interface LedgerEntry {
   contentHash: ContentHash;     // hash of the full file at read time
   range: LineRange | "outline"; // inclusive 1-based lines, or an outline delivery
   symbol?: string;              // when served via read_symbol
-  delivery: "full" | "range" | "outline" | "stub" | "diff" | "edit_echo";
+  delivery: "full" | "range" | "outline" | "stub" | "diff" | "edit_echo" | "instructions";
   estTokens: number;
   seq: number;
 }
@@ -53,7 +53,11 @@ Sources of ledger entries:
 - excerpts in an epoch seed (`relevant_code`), recorded with the seed's turn,
 - `read_artifact` ranges, keyed by artifact ID instead of path. This includes `web` artifacts
   delivered by `web_open`/`web_find`, so citations can be checked against what was actually
-  delivered ([Chrome research](chrome-research.md#citations)).
+  delivered ([Chrome research](chrome-research.md#citations)),
+- `instructions`: a project instruction file delivered in the seed, as a read-time notice, or in
+  an instruction-gate refusal. Recorded with its hash. The Patch Engine's
+  [instruction gate](patch-engine.md#instruction-gate) asks `instructionsDelivered` before every
+  mutation.
 
 ## Operations
 
@@ -69,6 +73,8 @@ interface ReadLedger {
   onFileChanged(path: string, newHash: ContentHash, cause: "kai_write" | "external" | "formatter"): StaleRegion[];
   /** For briefs: files read in a task, with symbol cards and staleness. */
   filesRead(taskId: TaskId): FileReadSummary[];
+  /** Instruction gate: was this instruction file delivered in this epoch at this hash? */
+  instructionsDelivered(path: string, hash: ContentHash, epochId: EpochId): boolean;
 }
 
 type LedgerCheck =

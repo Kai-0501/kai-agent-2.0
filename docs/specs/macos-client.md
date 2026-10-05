@@ -103,14 +103,16 @@ disclosure first.
 
 ### 4. Task, progress and evidence
 
-- Task view: objective and **user** acceptance criteria (with derived criteria labelled
-  "model-proposed"), plan, live turn stream (`stream.delta`), tool calls with shaped results,
+- Task view: the **Task Contract** ([task-contract](task-contract.md)): verbatim user entries
+  with versions, and an *Amend* action (`task.amend`); model `interpretations` and
+  `proposed_criteria` shown separately and labelled "model-proposed"; plan, live turn stream (`stream.delta`), tool calls with shaped results,
   edits (diff per transaction), notices.
 - Final verdict banner: `verified`, `verification_failed`, `implemented_unverified`, `blocked`
   (with reason, e.g. *route: plan limit reached*) or `cancelled`. Never just "done".
 - Evidence panel: checks with tier, status and classification (including
-  `introduced_intermittent`), integrity findings and obligations, critic findings split into
-  blocking and advisory with dispositions, artifacts (`artifact.read`), checkpoints and restore.
+  `introduced_intermittent`), integrity findings with their resolution (contract citation,
+  `integrity_review` verdict, user approval, or unresolved), `risk_review` findings split into
+  blocking and advisory with dispositions, pending recovery conflicts (`recovery.resolve`), artifacts (`artifact.read`), checkpoints and restore.
 - `blocked {route}` shows *Resume later*, *Switch route…* (explicit, with the usage class of the
   target route) and, for the subscription quota, *Open ChatGPT usage settings*.
 

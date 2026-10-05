@@ -1,6 +1,6 @@
 # ADR-0009: Verification architecture
 
-- Status: Proposed
+- Status: Proposed. Amended by [ADR-0015](0015-user-owned-task-contract.md) and [ADR-0016](0016-robustness-amendments.md).
 - Date: 2026-10-05
 - Related: [specs/verification-engine.md](../specs/verification-engine.md), [specs/test-integrity-guard.md](../specs/test-integrity-guard.md), [specs/critic.md](../specs/critic.md), [specs/repair-replan-controller.md](../specs/repair-replan-controller.md)
 
@@ -49,6 +49,14 @@ related tests.
 workspace checkpoint**, in a temporary git worktree, to classify each failure as
 **introduced**, **pre-existing** or **flaky** (failing intermittently on reruns). Only
 *introduced* failures block `verified`. Pre-existing failures are reported.
+*Amended by [ADR-0016](0016-robustness-amendments.md) (R2):* passing on rerun **no longer**
+makes a failure non-blocking. Non-blocking flakiness must be **established at baseline**
+(baseline reruns or baseline-only flake history) or be a **user-approved exception**
+(`knownFlaky`, or a per-task approval). A failure that appears now while the baseline passed
+every run is `introduced_intermittent` and blocks. *(R7 and
+[ADR-0015](0015-user-owned-task-contract.md)):* test-change authorization comes only from the
+user-owned Task Contract or the user. Mandatory integrity review has a reserved budget and,
+if unresolved, blocks `verified`. The optional risk review may be skipped.
 
 **The gate pipeline:** T2 → T3 → (T4 if required) → baseline classification → diff hygiene (no
 debug leftovers, no stray files, no conflict markers) → **Test Integrity Guard** review of the

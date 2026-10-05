@@ -51,8 +51,10 @@ but none is in an indefinite "later" list.
 - **Research** is one runtime-owned service that drives the installed Chrome, shared by all
   profiles ([ADR-0023](0023-chrome-research.md)). It replaces the `research` pack of
   [ADR-0012](0012-tool-surface-and-dynamic-exposure.md), which used Gemini built-in tools.
-- **Audit corrections** found in review of the founding specs are integrated now
-  ([ADR-0016](0016-robustness-amendments.md)), because the new routes multiply their impact.
+- **Audit corrections** found in review of the founding specs (the user-owned Task Contract,
+  [ADR-0015](0015-user-owned-task-contract.md), and the robustness amendments,
+  [ADR-0016](0016-robustness-amendments.md)) apply to every route and profile, because the new
+  routes multiply their impact.
 
 Still out of scope for R1: multi-user or remote clients, OS sandboxing of commands, MCP,
 Windows and Linux desktop builds, a broad UI redesign, unrestricted browser automation, and

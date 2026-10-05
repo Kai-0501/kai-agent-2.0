@@ -5,6 +5,7 @@
  * Spec: docs/specs/reasoning-governor.md
  */
 import type { AppliedEffort, EffortLevel } from "@kai/protocol";
+import type { TaskContract } from "./contract.js";
 
 export type RequestPurpose = "work" | "replan" | "critic" | "decision_digest" | "probe" | "reflection";
 export type Phase = "explore" | "plan" | "implement" | "repair" | "verify";
@@ -60,6 +61,7 @@ export interface DiffSummary {
 }
 
 export interface RiskAssessor {
-  initial(task: { readonly objective: string; readonly mentionedPaths: readonly string[] }): RiskAssessment;
+  /** Scores user-owned contract text only, never the model's plan. */
+  initial(task: { readonly contract: TaskContract; readonly mentionedPaths: readonly string[] }): RiskAssessment;
   update(current: RiskAssessment, diff: DiffSummary, history: { readonly replans: number; readonly attempts: number }): RiskAssessment;
 }

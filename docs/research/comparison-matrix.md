@@ -72,7 +72,9 @@ A compact side-by-side view of the studied harnesses. Details and permalinks are
 | LSP navigation tools | OpenCode, Serena | 🔧 symbol-addressed, capability pack | [tool surface](../specs/tool-surface.md) |
 | Gemini-3 tool names and shapes | Gemini CLI, OpenHands | ✅ | [ADR-0012](../adr/0012-tool-surface-and-dynamic-exposure.md) |
 | Omission-placeholder detection | Gemini CLI | ✅ | [firewall](../specs/hallucination-firewall.md) |
-| JIT subdirectory instructions | Gemini CLI | ✅ | [context compiler](../specs/context-compiler.md) |
+| JIT subdirectory instructions | Gemini CLI | 🔧 kept as a read-time optimization; the guarantee is an up-front instruction map plus a pre-mutation instruction gate ([ADR-0016](../adr/0016-robustness-amendments.md)) | [context compiler](../specs/context-compiler.md#project-instructions-instruction-map-and-pre-mutation-gate) |
+| Model-editable task objective / self-justified test changes | Kai's founding draft | ❌ replaced by a user-owned Task Contract ([ADR-0015](../adr/0015-user-owned-task-contract.md)) | [task contract](../specs/task-contract.md) |
+| "Passed on rerun" = flaky = non-blocking | Kai's founding draft; common CI retry practice | ❌ only baseline-established flakiness or user-approved exceptions ([ADR-0016](../adr/0016-robustness-amendments.md)) | [verification](../specs/verification-engine.md#lazy-baseline-classification) |
 | Spill large output to file | Goose, Gemini CLI | ✅ with structured summaries, lower threshold | [artifact store](../specs/artifact-store.md) |
 | Retroactive duplicate-read removal | Cline | 🔧 ingress-time ledger instead | [read ledger](../specs/read-ledger.md) |
 | Git checkpoints with private index under own refs | Cline, T3 Code, OpenCode | ✅ | [ADR-0013](../adr/0013-workspace-safety-and-checkpoints.md) |

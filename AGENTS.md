@@ -6,7 +6,7 @@ user-configured OpenAI-compatible endpoints run on a generic profile with the sa
 Hold this codebase to the standards it enforces on the models.
 
 > **Status:** architecture and type scaffold only, including the R1 release extension
-> ([ADR-0017](docs/adr/0019-release-scope-macos-multi-provider.md)). Production implementation
+> ([ADR-0017](docs/adr/0017-release-scope-macos-multi-provider.md)). Production implementation
 > starts with [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) Phase 0. Files under
 > `packages/*/src/` that begin with a `SCAFFOLD` header are type sketches, not implementations.
 
@@ -31,14 +31,18 @@ spec in the same PR as the code, and explain why in the PR description.
 2. **Only the Verification Engine can mark a task `verified`**, for every route and profile.
    No code path may set it from a model claim, a tool result, a critic budget, a learned skill
    or a client request.
-3. **Nothing reaches the worktree except through a Patch Engine transaction**, which means
-   overlay, firewall, hash check, then atomic commit, with a reverse patch recorded. Tools must
-   not write files directly. Shell commands are the only other writers, and they are
-   policy-gated and checkpointed.
-4. **Nothing reaches the model except through the Context Compiler's seed or ingress path**, and
-   every request passes the **preflight**. Every tool result (including web content and learned
-   procedure cards) is shaped and counted in the manifest, together with replayed model output.
-   There is no "just append the raw output" path.
+3. **Nothing reaches the worktree except through a Patch Engine transaction**: instruction
+   gate, overlay, firewall, then a **write-ahead journaled** commit (a durable
+   `TransactionPrepared` with every file's full before- and after-images *before* the first
+   write; stage, verify, swap, commit marker), with a reverse patch recorded. Startup runs crash
+   recovery before anything else. Tools must not write files directly. Shell commands are the
+   only other writers, and they are policy-gated, instruction-gated and checkpointed.
+4. **Nothing reaches the model except through the Context Compiler's seed or ingress path, and
+   no request is sent without passing preflight.** Every tool result (including web content and
+   learned procedure cards) is shaped (Result Shaper and Read Ledger) and counted in a
+   **complete** manifest that includes model-generated history and replayed provider-native
+   items. There is no "just append the raw output" path, and no request is ever sent above the
+   hard limit.
 5. **Clients use only the KSP protocol** (`packages/protocol`). `packages/cli` and `apps/macos`
    must not import runtime internals.
 6. **Core depends on interfaces, not implementations.** `packages/core` must not import
@@ -54,27 +58,34 @@ spec in the same PR as the code, and explain why in the PR description.
    ([ADR-0014](docs/adr/0014-measurement-gated-mechanisms.md)).
 10. **Reported vs estimated tokens are never mixed, and unknown is never zero.** API usage is
     *reported*; a field the route did not report is `null`. Kai's numbers are *estimated* and
-    labelled as such everywhere. Plan usage, API spend and local compute are separate classes.
-11. **Secrets stay in the runtime.** Credentials live only in the `CredentialStore` (Keychain or
+    labelled as such everywhere: types, UI, reports. Estimated savings are shown as calibrated
+    only while request accounting reconciles with reported usage. Plan usage, API spend and local
+    compute are separate usage classes.
+11. **The user owns the requirements** ([ADR-0015](docs/adr/0015-user-owned-task-contract.md)).
+    The Task Contract is verbatim and append-only, and only user-action protocol handlers can
+    amend it (they alone can mint a `UserActionToken`). Model-authored text (plans, notes,
+    interpretations, transaction `instruction`s, claims, justification `reason`s), learned
+    skills and critic output **never** authorize weakening a test, a check or a requirement.
+12. **Mandatory gates are never skipped for budget, mode or availability reasons.** Optional
+    reviews (the critic's `risk_review`) may be skipped and reported. Mandatory ones (integrity
+    resolution, baseline classification, the instruction gate) fail closed: unresolved means not
+    `verified` ([ADR-0016](docs/adr/0016-robustness-amendments.md)). This holds for every
+    profile, including those without structured review.
+13. **Secrets stay in the runtime.** Credentials live only in the `CredentialStore` (Keychain or
     environment). They never appear in KSP messages (except the inbound `credentials.put`),
     events, blobs, logs, renderer state or model input.
-12. **The user owns the objective.** User acceptance criteria change only through `task.amend`.
-    Model plans, critic output and learned skills may add checks; they never narrow criteria or
-    authorize weaker verification.
-13. **Learned advice is advisory and scoped.** It never outranks explicit user instructions,
-    applicable repository instructions or verification constraints. Changes to permissions,
-    verification requirements, integrity policy, objectives or runtime code are never learned
+14. **Learned advice is advisory and scoped.** It never outranks the Task Contract, applicable
+    repository instructions or verification constraints. Changes to permissions, verification
+    requirements, integrity policy, requirements or runtime code are never learned
     automatically. Each task pins its learning snapshot.
-14. **Untrusted input never becomes instruction or policy.** Repository text, tool output and web
-    pages are data. Web content cannot change objectives, permissions or research policy and
+15. **Untrusted input never becomes instruction or policy.** Repository text, tool output and web
+    pages are data. Web content cannot change the contract, permissions or research policy and
     cannot become a global lesson. Workspace config is restrict-only for safety keys.
-15. **No silent route changes.** Never switch provider, route or account on quota, error or
+16. **No silent route changes.** Never switch provider, route or account on quota, error or
     preference without the user; never send `local_only` data to a cloud route. Switches happen
     at safe boundaries, and provider-native replay never crosses a provider, route or account.
-16. **No cross-store transactions.** Workspace, learning and app stores are separate; cross-store
+17. **No cross-store transactions.** Workspace, learning and app stores are separate; cross-store
     effects go through the outbox with idempotent IDs.
-17. **Review obligations are discharged only by a validated review or the user.** Budgets,
-    failures and profiles without structured review never discharge them.
 18. **Research is read-oriented and isolated.** The browser uses Kai's own profile, the pipe
     transport and the filtering proxy; it never touches the user's everyday Chrome profile and
     never reaches private or local destinations.
@@ -105,13 +116,14 @@ spec in the same PR as the code, and explain why in the PR description.
 - **Fail closed on uncertainty** in gates (e.g. if the baseline cannot be computed, treat
   failures as introduced), but **degrade gracefully** in advisory checks (LSP timeouts → a
   warning, not a crash).
+- **"Passed on rerun" is not evidence of harmlessness.** Only baseline-established flakiness or
+  a user-approved exception may stop an intermittent failure from blocking.
 - Never let a flaky or slow dependency (LSP, network, Chrome, an endpoint) block the loop
   indefinitely. Everything has a timeout and an `AbortSignal`.
 - **Typed outcomes, not silence:** a parse failure is never "no results"; an unknown capability is
   `unknown`, not `supported`; an interrupted stream is a failure even if text arrived.
 - Execute a tool call only after its response completed and the whole call validated (name,
   JSON, schema).
-- A passing rerun never turns a newly introduced intermittent failure into accepted flakiness.
 
 ## Quality requirements for this repository
 
@@ -127,7 +139,10 @@ spec in the same PR as the code, and explain why in the PR description.
     live-auth, installed-Chrome and app suites are separate and gated
     ([plan](IMPLEMENTATION_PLAN.md#phase-0-foundations-s)). **Never report a live suite as
     passing unless it ran in its required environment;**
-  - **property tests** for the event store (rebuild equality) and the patch engine (atomicity).
+  - **property tests** for the event store (rebuild equality) and the patch engine (atomicity);
+  - **crash-injection tests** for the transaction journal (the K1–K8 matrix in the
+    [patch-engine spec](docs/specs/patch-engine.md#acceptance-tests)). Any change to the commit
+    path must keep them green.
 - Use the **fake provider** for loop and controller tests. Record real SSE fixtures with the
   contract suite for provider unit tests.
 - Error handling: typed errors (`KaiError` with `code`, `retryable`). No silent catches.
