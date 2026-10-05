@@ -2,7 +2,7 @@
  * SCAFFOLD: types only. Not an implementation.
  *
  * Tool registry, core tools and capability packs (Gemini-CLI "gemini-3" shapes where semantics match).
- * Spec: docs/specs/tool-surface.md · Decision: docs/adr/0012.
+ * Spec: docs/specs/tool-surface.md · Decisions: docs/adr/0012, amended by docs/adr/0015.
  */
 import type { ArtifactId, EpochId, SessionId, TaskId, TurnId } from "@kai/protocol";
 import type { TurnCounters } from "./telemetry.js";
@@ -39,18 +39,34 @@ export interface CoreToolArgs {
   write_file: { file_path: string; content: string; instruction?: string };
   run_shell_command: { command: string; description?: string; timeout_s?: number; background?: boolean };
   read_artifact: { artifact_id: string; query?: string; start_line?: number; end_line?: number };
+  /**
+   * Model-authored WORKING STATE only. Deliberately no `objective` / `acceptance_criteria`: those live
+   * in the user-owned Task Contract. The schema is strict, so passing them fails validation.
+   */
   update_plan: {
-    objective?: string;
-    acceptance_criteria?: string[];
     plan?: { step: string; status: "todo" | "doing" | "done" | "dropped" }[];
     decisions?: { decision: string; rationale: string }[];
     notes?: string[];
+    /** How the model reads ambiguous requirements. Commentary; never authoritative. */
+    interpretations?: string[];
+    /** Extra checks the model commits to. Additive only; never relaxes a requirement. */
+    proposed_criteria?: string[];
     scope?: { paths: string[]; symbols?: string[] };
     new_symbols?: string[];
     request_capabilities?: { pack: PackId; reason: string }[];
     phase?: "explore" | "plan" | "implement" | "verify";
   };
   complete_task: { summary: string; claims?: string[] };
+}
+
+/** Pack tools whose argument shapes matter for correctness rules. */
+export interface PackToolArgs {
+  /** `tests` pack. `reason` carries no authority; only a valid contract citation backs a change. */
+  justify_test_change: {
+    test_id_or_path: string;
+    reason: string;
+    contract_citation?: { entry_id: string; quote: string };
+  };
 }
 
 export interface ToolContext {

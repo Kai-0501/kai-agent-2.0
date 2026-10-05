@@ -49,7 +49,7 @@ interface RiskAssessment {
   reasons: string[];                // e.g. "touches src/auth/**", "adds dependency", "changes exported API"
 }
 interface RiskAssessor {
-  initial(task: { objective: string; mentionedPaths: string[] }): RiskAssessment;
+  initial(task: { contract: TaskContract; mentionedPaths: string[] }): RiskAssessment;   // user-owned text only
   update(current: RiskAssessment, diff: DiffSummary, history: { replans: number; attempts: number }): RiskAssessment;
 }
 ```
@@ -95,7 +95,7 @@ Score contributions (capped at 100). `level`: under 25 low, 25–59 medium, 60 a
 | Path matches `**/auth/**`, `**/security/**`, `**/crypto/**`, `**/permissions/**`, `**/payment*/**` | +30 |
 | Migrations (`**/migrations/**`, `*.sql`, ORM migration files) | +30 |
 | Concurrency primitives in touched code (`Mutex`, `Lock`, `threading`, `asyncio.Lock`, `Atomics`, `worker_threads`, `go func`, `chan`, `sync.`) | +25 |
-| Objective keywords: security, auth, race, deadlock, concurrency, migration, encrypt, token, password, breaking, public API | +15 each (max +30) |
+| Contract keywords (user-owned text): security, auth, race, deadlock, concurrency, migration, encrypt, token, password, breaking, public API | +15 each (max +30) |
 | New dependency added to a manifest | +20 |
 | Exported/public symbol signature changed (index diff) | +15 |
 | Files changed > 5 | +10; > 15: +20 |
@@ -104,7 +104,7 @@ Score contributions (capped at 100). `level`: under 25 low, 25–59 medium, 60 a
 | Replans ≥ 1 | +15 |
 | Repair attempts ≥ 4 | +10 |
 
-`initial` uses objective and paths only. `update` is re-run after each applied transaction.
+`initial` uses the task contract's text (user-owned; never the model's plan) and paths only. `update` is re-run after each applied transaction.
 
 ## Events and telemetry
 

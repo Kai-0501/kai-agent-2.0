@@ -1,6 +1,6 @@
 # ADR-0005: Context compiler and context epochs
 
-- Status: Proposed
+- Status: Proposed. Amended by [ADR-0015](0015-user-owned-task-contract.md) and [ADR-0016](0016-robustness-amendments.md).
 - Date: 2026-10-05
 - Related: [specs/context-compiler.md](../specs/context-compiler.md), [specs/read-ledger.md](../specs/read-ledger.md), [specs/artifact-store.md](../specs/artifact-store.md), [research/synthesis.md §2.1](../research/synthesis.md#21-construct-each-model-turn-from-a-strict-token-budget-conflicts-with-gemini-caching)
 
@@ -42,6 +42,11 @@ accumulates cost, stale file views and abandoned hypotheses.
    (Artifact Store spooling, structured summaries) and the **Read Ledger** (de-duplication and
    staleness notices) before it is appended. Harness notices (verification results, stale-file
    notices, budget signals) are short and are appended, never inserted earlier.
+   *Amended by [ADR-0016](0016-robustness-amendments.md) (R4, R6):* before **every** request, a
+   **preflight** projects the complete request size (prior reported input, carried model output,
+   the pending batch and a margin) and reshapes or rolls over **before** a limit is crossed, with
+   an `ingressBatchMax` cap. Nested project instructions are discovered up front (instruction
+   map), included in seeds for known paths, and enforced by a pre-mutation instruction gate.
 4. **Epoch boundaries** (whichever comes first):
    - observed `total_input_tokens` of the last request exceeds the **soft epoch limit** (default
      64k, configurable, to be calibrated by the benchmark);
@@ -52,9 +57,10 @@ accumulates cost, stale file views and abandoned hypotheses.
      external workspace changes to files read in the epoch;
    - **hard limit** (default 160k): a forced boundary even mid-phase;
    - a model or provider switch, or a new user task.
-5. **The epoch brief is mostly deterministic.** It is assembled from projections: objective and
-   acceptance criteria, constraints, plan, decisions and notes the model recorded through
-   `update_plan`, files read (ledger, with symbol cards), files modified (diff stat plus each
+5. **The epoch brief is mostly deterministic.** It is assembled from projections: the user-owned
+   **Task Contract** verbatim (*amended by [ADR-0015](0015-user-owned-task-contract.md)*: the
+   model can no longer set the objective or acceptance criteria), the plan, decisions, notes and
+   interpretations the model recorded through `update_plan` (rendered as model-authored), files read (ledger, with symbol cards), files modified (diff stat plus each
    transaction's `instruction`), verification state, known failures (exact, fingerprinted),
    attempted approaches, and the next action. **Only** if the model has not recorded its
    decisions does an LLM "decision digest" run, at `thinking_level: low` with a token cap

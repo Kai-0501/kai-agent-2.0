@@ -1,6 +1,6 @@
 # ADR-0010: Token and correctness telemetry
 
-- Status: Proposed
+- Status: Proposed. Amended by [ADR-0016](0016-robustness-amendments.md).
 - Date: 2026-10-05
 - Related: [specs/telemetry.md](../specs/telemetry.md), [evaluation/benchmark-plan.md](../evaluation/benchmark-plan.md), [ADR-0004](0004-durable-event-session-model.md)
 
@@ -29,6 +29,12 @@ verification results, repairs, firewall rejections).
   (time-to-first-token and total), status, and the **context manifest**: estimated tokens per
   category (system, tools, project instructions, brief, map, symbols and excerpts, tail by tool
   type, notices, unattributed = reported − estimated).
+  *Amended by [ADR-0016](0016-robustness-amendments.md) (R5):* the manifest is a **complete**
+  accounting of each request (cumulative composition plus delta), including model-generated
+  history (`history_model_text`, `history_function_calls`, `history_thoughts`) sized from
+  **reported** output and thought tokens, plus framing. The estimator calibrates only on measured
+  ingress and seed turns. Estimated savings are shown as calibrated only while accounting is
+  healthy (residual ≤ 5%, no identity violations).
 - **Counters per turn and session:** files and symbols read; whole-file reads; **duplicate reads
   prevented** (and estimated tokens saved); **re-reads after staleness**; tool-output bytes
   produced vs injected (spooling ratio); artifacts created and read back; firewall evaluations

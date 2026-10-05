@@ -57,6 +57,43 @@ export type FinalTaskState = Extract<
 
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
 
+/** Why a task is blocked (blocked is a final state in headless runs). */
+export type BlockedReason = "stuck" | "integrity_review_required" | "recovery_conflict" | "external_change" | "needs_user";
+
+/**
+ * Failure classes (docs/specs/verification-engine.md#lazy-baseline-classification). Only
+ * `pre_existing`, `baseline_flaky` (established on the baseline) and `known_flaky` (user-approved)
+ * do not block; a failure that appears only intermittently on the current tree is `introduced_intermittent`.
+ */
+export type FailureClassification = "introduced" | "introduced_intermittent" | "pre_existing" | "baseline_flaky" | "known_flaky";
+
+export interface RunCounts {
+  readonly passed: number;
+  readonly failed: number;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Task Contract: user-owned requirements, verbatim and append-only (docs/specs/task-contract.md, ADR-0015)
+// ---------------------------------------------------------------------------------------------
+
+export interface ContractEntry {
+  readonly id: string; // "c1", "c2", ... stable, used in citations
+  readonly kind: "prompt" | "acceptance" | "steering" | "amendment" | "approval";
+  /** VERBATIM user text: never summarized or rewritten. */
+  readonly text: string;
+  readonly by: "user";
+  readonly source: { readonly protocolMethod: string; readonly seq: number };
+  readonly supersedes?: readonly string[];
+}
+
+export interface TaskContractView {
+  readonly taskId: TaskId;
+  readonly version: number;
+  readonly entries: readonly ContractEntry[];
+  readonly instructionFiles: readonly { readonly path: string; readonly hash: ContentHash; readonly scopeDir: string }[];
+  readonly hash: ContentHash;
+}
+
 // ---------------------------------------------------------------------------------------------
 // JSON-RPC framing
 // ---------------------------------------------------------------------------------------------
@@ -144,7 +181,10 @@ export interface KspMethods {
     params: { sessionId: SessionId; afterSeq?: number };
     result: { snapshot: SessionSnapshot; snapshotSeq: number };
   };
+  /** Records the user-owned Task Contract v1. */
   "task.submit": { params: { sessionId: SessionId; prompt: string; acceptance?: string[] }; result: { taskId: TaskId } };
+  /** User-only contract amendment (appended, never overwritten). */
+  "task.amend": { params: { taskId: TaskId; text: string; supersedes?: string[] }; result: { contractVersion: number } };
   "task.steer": { params: { taskId: TaskId; message: string }; result: Record<string, never> };
   "task.cancel": { params: { taskId: TaskId }; result: Record<string, never> };
   "task.report": { params: { taskId: TaskId }; result: TaskReport };
@@ -155,6 +195,11 @@ export interface KspMethods {
   "checkpoint.list": { params: { sessionId: SessionId }; result: { checkpoints: CheckpointInfo[] } };
   "checkpoint.restore": { params: { checkpointId: CheckpointId; paths?: string[] }; result: { restoredPaths: string[] } };
   "artifact.read": { params: { artifactId: ArtifactId; range?: LineRange }; result: { text: string; totalLines: number } };
+  /** Resolve a crash-recovery conflict (docs/specs/patch-engine.md#crash-recovery). */
+  "recovery.resolve": {
+    params: { txnId: TransactionId; choices: { path: string; choice: "keep_disk" | "restore_before" | "restore_after" }[] };
+    result: Record<string, never>;
+  };
   "stats.get": { params: { scope: "turn" | "task" | "session" | "workspace"; id: string }; result: Record<string, unknown> };
 }
 
@@ -191,7 +236,7 @@ export type KspEphemeralNotification =
 
 export interface PermissionRequest {
   readonly requestId: PermissionRequestId;
-  readonly kind: "command" | "path" | "network" | "integrity";
+  readonly kind: "command" | "path" | "network" | "integrity" | "verification_exception";
   readonly detail: string; // the command argv or path, rendered
   readonly risk: "low" | "medium" | "high";
   readonly reason: string;
@@ -203,7 +248,14 @@ export interface PermissionRequest {
 
 export interface SessionSnapshot {
   readonly session: SessionInfo;
-  readonly activeTask?: { readonly taskId: TaskId; readonly state: TaskState; readonly objective: string; readonly plan: readonly PlanItem[] };
+  readonly activeTask?: {
+    readonly taskId: TaskId;
+    readonly state: TaskState;
+    readonly blockedReason?: BlockedReason;
+    readonly contract: TaskContractView; // user-owned requirements
+    readonly plan: readonly PlanItem[]; // model-authored working state (rendered as such)
+  };
+  readonly pendingRecoveryConflicts: readonly { readonly txnId: TransactionId; readonly paths: readonly string[] }[];
   readonly recentTurns: readonly { readonly turnId: TurnId; readonly summary: string }[];
   readonly openPermissionRequests: readonly PermissionRequest[];
   readonly lastVerdict?: { readonly taskId: TaskId; readonly state: FinalTaskState };
@@ -218,12 +270,16 @@ export interface PlanItem {
 export interface TaskReport {
   readonly taskId: TaskId;
   readonly state: TaskState;
+  readonly blockedReason?: BlockedReason;
+  /** What the task was graded against. */
+  readonly contract: { readonly version: number; readonly hash: ContentHash };
   readonly evidence?: EvidenceSummary;
   readonly diffStat: { readonly files: number; readonly insertions: number; readonly deletions: number };
   /** Reported usage totals (from the API), plus estimated savings, always labelled. */
   readonly usage: {
     readonly reported: { input: number; cached: number; thought: number; output: number; total: number };
-    readonly estimatedSavings: { ledger: number; spooling: number };
+    /** ESTIMATED; only labelled calibrated while request accounting reconciles with reported usage. */
+    readonly estimatedSavings: { ledger: number; spooling: number; calibrated: boolean };
     readonly costUsd: number;
     readonly priceTableVersion: string;
   };
@@ -235,12 +291,15 @@ export interface EvidenceSummary {
     readonly id: string;
     readonly tier: "T2" | "T3" | "T4";
     readonly status: "pass" | "fail" | "skipped" | "error";
-    readonly classification?: "introduced" | "pre_existing" | "flaky";
+    readonly classification?: FailureClassification;
+    readonly runs?: { readonly now: RunCounts; readonly baseline?: RunCounts };
     readonly artifactId?: ArtifactId;
     readonly summary: string;
   }[];
   readonly integrityFindings: number;
-  readonly criticRan: boolean;
+  readonly integrityUnresolved: number;
+  readonly riskReview: "ran" | "skipped" | "not_triggered";
+  readonly integrityReview: "ran" | "unavailable" | "not_required";
   readonly unverifiedReasons?: readonly string[];
 }
 

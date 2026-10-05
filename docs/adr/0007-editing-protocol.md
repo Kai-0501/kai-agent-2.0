@@ -1,6 +1,6 @@
 # ADR-0007: Editing protocol
 
-- Status: Proposed
+- Status: Proposed. Amended by [ADR-0016](0016-robustness-amendments.md).
 - Date: 2026-10-05
 - Related: [specs/patch-engine.md](../specs/patch-engine.md), [specs/hallucination-firewall.md](../specs/hallucination-firewall.md), [specs/tool-surface.md](../specs/tool-surface.md), [research/upstream/gemini-cli.md](../research/upstream/gemini-cli.md), [research/upstream/swe-agent.md](../research/upstream/swe-agent.md), [research/upstream/codex-and-serena.md](../research/upstream/codex-and-serena.md)
 
@@ -54,6 +54,14 @@ Matching strategies: exact; whitespace-normalized; regex; fuzzy (Levenshtein or
    `TransactionApplied` event with before and after hashes and a **reverse patch** (as a blob).
    Line endings and BOMs are preserved. If a mid-commit failure happens on file N, roll back
    files 1..N-1 from their before-blobs.
+   *Amended by [ADR-0016](0016-robustness-amendments.md) (R3):* commits are **write-ahead
+   journaled**. A durable `TransactionPrepared` record with every file's full before- and
+   after-images is committed (`synchronous=FULL`) before any file is touched. Then: stage temps,
+   verify hashes, swap, write the commit marker. Crash recovery at startup is deterministic and
+   idempotent (roll forward, abort, roll back, or block for the user on foreign changes), and is
+   tested with a crash-injection matrix. *Also (R6):* an **instruction gate** runs before
+   matching, and refuses edits until the project instructions that apply to the target paths have
+   been delivered.
 6. **Feedback.** The edit result is short: the applied hunk(s) with line numbers and a few
    context lines, plus firewall and diagnostic deltas. This doubles as a ledger read of the new
    region, so the model's view stays current without a re-read.

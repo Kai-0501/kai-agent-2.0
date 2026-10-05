@@ -57,6 +57,13 @@ export interface ModelCapabilities {
   readonly builtInTools: readonly string[];
   /** Whether changing tool declarations within a chained context keeps the cache valid (G2). */
   readonly toolChangesWithinChainAreCacheSafe: boolean | "unknown";
+  /**
+   * Whether a chained request's reported input includes the previous response's output / thoughts (G10).
+   * Used by request preflight and complete request accounting. "unknown" → assume output yes, thoughts no,
+   * and keep the projection conservative.
+   */
+  readonly chainedInputIncludesPriorOutput: boolean | "unknown";
+  readonly chainedInputIncludesPriorThoughts: boolean | "unknown";
 }
 
 export interface ProviderTurnRequest<O = unknown> {

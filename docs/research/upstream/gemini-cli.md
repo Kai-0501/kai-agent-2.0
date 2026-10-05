@@ -89,8 +89,10 @@ engine and confirmation bus, skills, plan mode, and a tracker service.
    omission-placeholder rule in the `replace` description
    ([tool surface spec](../../specs/tool-surface.md)).
 2. **The omission-placeholder detector** as a firewall check.
-3. **JIT subdirectory instructions** (Kai reads `AGENTS.md` and `KAI.md` scoped files on first
-   touch of a subtree).
+3. **JIT subdirectory instructions**, adapted. Kai keeps read-time delivery as an optimization,
+   but JIT alone lets the first edit in a directory land before its instructions are seen. Kai
+   therefore adds an up-front **instruction map** and a **pre-mutation instruction gate**
+   ([ADR-0016](../../adr/0016-robustness-amendments.md)).
 4. **Streamed-content repetition detection** to abort degenerate generations early. This saves
    output tokens, and it costs nothing.
 5. **The structure of `state_snapshot`** as a checklist of fields Kai's epoch brief must cover.

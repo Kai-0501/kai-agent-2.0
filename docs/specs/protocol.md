@@ -48,11 +48,13 @@ client → session.close {sessionId}
 | `workspace.profile.get` / `.set` | — / `VerificationProfile` | the profile |
 | `session.create` / `.resume` / `.list` / `.close` | … | `SessionInfo` |
 | `session.subscribe` | `sessionId`, `afterSeq?` | `{snapshot: SessionSnapshot, snapshotSeq}`, then `event` notifications |
-| `task.submit` | `sessionId`, `prompt`, `acceptance?: string[]` | `{taskId}` |
-| `task.steer` | `taskId`, `message` | `{}` |
+| `task.submit` | `sessionId`, `prompt`, `acceptance?: string[]` | `{taskId}`. Records the user-owned **Task Contract** v1 ([task-contract](task-contract.md)) |
+| `task.steer` | `taskId`, `message` | `{}`. Appends a `steering` contract entry, and delivers the message to the model after the current turn |
+| `task.amend` | `taskId`, `text`, `supersedes?: string[]` | `{contractVersion}`. User-only contract amendment |
 | `task.cancel` | `taskId` | `{}` |
 | `task.report` | `taskId` | `TaskReport` (state, evidence, diff stat, telemetry summary) |
-| `permission.respond` | `requestId`, `decision: allow\|deny`, `remember?: "session"\|"workspace"` | `{}` |
+| `permission.respond` | `requestId`, `decision: allow\|deny`, `remember?: "session"\|"workspace"` | `{}`. Approvals of integrity findings or verification exceptions are appended to the contract as `approval` entries |
+| `recovery.resolve` | `txnId`, `choices: {path, choice: "keep_disk"\|"restore_before"\|"restore_after"}[]` | `{}`. Resolves a crash-recovery conflict ([patch-engine](patch-engine.md#crash-recovery)) |
 | `checkpoint.list` / `.restore` | `sessionId` / `checkpointId`, `paths?` | — |
 | `artifact.read` | `artifactId`, `range?` | text slice (for UI viewers) |
 | `stats.get` | `scope: turn\|task\|session\|workspace`, `id` | telemetry aggregates |
@@ -65,14 +67,15 @@ durable event log** ([event-model.md](event-model.md)), filtered to UI-relevant 
 addition there are **ephemeral** notifications that are not persisted and carry no `seq`:
 
 - `stream.delta {turnId, kind: "text"|"thought_summary"|"tool_args", delta}` for live rendering,
-- `permission.request {requestId, kind, command|path, risk, reason}`,
+- `permission.request {requestId, kind: "command"|"path"|"network"|"integrity"|"verification_exception", detail, risk, reason}`,
 - `progress {operation, message, fraction?}` (indexing, LSP start, long commands).
 
 ## Snapshot model
 
-`SessionSnapshot` is a compact projection: session info, active task and state, plan, recent
-turns (summarized), open permission requests, the last verification verdict, and running
-processes. A client renders the snapshot, then applies events with `seq > snapshotSeq`. After a
+`SessionSnapshot` is a compact projection: session info, the active task with its state and
+**Task Contract** (version and entries), the plan (model-authored, labelled), recent turns
+(summarized), open permission requests, pending recovery conflicts, the last verification
+verdict, and running processes. A client renders the snapshot, then applies events with `seq > snapshotSeq`. After a
 reconnect it resubscribes with `afterSeq = lastSeenSeq`.
 
 ## Errors
@@ -96,3 +99,6 @@ optional features (T3 Code's rule).
 3. Permission round-trip: a deny decision results in a `function_result` with `is_error` reaching
    the model and no process being started.
 4. Lint rule: `packages/cli` does not import runtime internals.
+5. Only user-action handlers (`task.submit`, `task.steer`, `task.amend`, `permission.respond`,
+   `recovery.resolve`) can change the Task Contract or resolve integrity reviews and recovery
+   conflicts. A test asserts that the Turn Loop cannot mint the required `UserActionToken`.

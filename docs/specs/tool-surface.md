@@ -109,6 +109,10 @@ Results ([patch-engine.md](patch-engine.md)):
   context, plus firewall and diagnostics deltas (introduced or resolved).
 - **Rejected:** `NOT APPLIED — <reason>` plus specific evidence (candidates, findings, the
   current excerpt). The whole transaction is listed as not applied.
+- **Instructions pending:** `NOT APPLIED — project instructions apply to these paths and were
+  not yet in your context`, followed by the full text of the applicable instruction file(s).
+  The model reviews them and resends the edit, changed or unchanged
+  ([patch-engine.md](patch-engine.md#instruction-gate)).
 
 ### `write_file`
 ```
@@ -143,19 +147,28 @@ shown in the epoch is stubbed).
 
 ### `update_plan` (Kai)
 ```
-objective?: string
-acceptance_criteria?: string[]
 plan?: {step: string, status: "todo"|"doing"|"done"|"dropped"}[]
 decisions?: {decision: string, rationale: string}[]       // appended
 notes?: string[]                                           // durable facts learned
+interpretations?: string[]                                 // how the model reads ambiguous requirements
+proposed_criteria?: string[]                               // extra checks the model commits to (additive only)
 scope?: {paths: string[], symbols?: string[]}              // intended change scope
 new_symbols?: string[]                                     // symbols the plan will create
 request_capabilities?: {pack: string, reason: string}[]
 phase?: "explore"|"plan"|"implement"|"verify"
 ```
-Updates the task's **working state**, which is durable and becomes part of every epoch brief.
-Returns `ok` and the current plan in a compact form. `scope` and `new_symbols` feed the firewall
-(scope checks, promissory symbols). `phase` feeds the Governor.
+Updates the task's **working state**, which is durable and becomes part of every epoch brief
+under a `<working_state author="model">` heading. Returns `ok` and the current plan in a compact
+form. `scope` and `new_symbols` feed the firewall (scope checks, promissory symbols). `phase`
+feeds the Governor.
+
+**The model cannot change the requirements.** There is deliberately no `objective` or
+`acceptance_criteria` argument. The objective and acceptance criteria come only from the
+user-owned **Task Contract** ([task-contract.md](task-contract.md)), which the model can read but
+not modify. `interpretations` and `proposed_criteria` are model-authored commentary. They are
+shown as such, they can only *add* expectations, and they **never authorize** relaxing a test,
+a check or a contract requirement. The schema rejects unknown fields, so an attempt to pass
+`objective` fails validation with a message pointing to the contract.
 
 ### `complete_task` (Kai)
 ```
@@ -173,7 +186,7 @@ task continues within the repair budget).
 |---|---|---|
 | `code_intel` | `find_references(name, file_path?)`, `go_to_definition(name, file_path?)`, `type_of(name or expression, file_path)`, `workspace_symbols(query)`, `rename_symbol(name, new_name, file_path?)` (transactional) | LSP healthy for the task language |
 | `api_reality` | `inspect_api(package, symbol?)`, `dependency_info(package)` | the task touches third-party imports, or on request |
-| `tests` | `run_tests(selector?, files?)`, `justify_test_change(test_id, reason, requirement_ref?)` | implementation, repair and verification phases |
+| `tests` | `run_tests(selector?, files?)`, `justify_test_change(test_id, reason, contract_citation?: {entry_id, quote})` (the citation must quote the user-owned contract verbatim; see [test-integrity-guard](test-integrity-guard.md#justification-and-review)) | implementation, repair and verification phases |
 | `vcs` | `git_diff(paths?, staged?)`, `git_log(path?, n?)`, `git_blame(path, start_line, end_line)` | on request |
 | `research` | Gemini built-in `google_search`, `url_context`; `web_fetch(url)` | on request plus user permission |
 | `multi_file_patch` | `apply_patch(patch)` (Codex grammar) | experimental, benchmark-gated |
@@ -200,6 +213,8 @@ Kept stable within an epoch, versioned via `PromptVersioned`, and with a target 
 less:
 
 1. Role and objective style (precise, minimal diffs, follow repository conventions).
+   **The `<task_contract>` is the user's requirement, verbatim. It is authoritative, and you
+   cannot change it. Your plans and interpretations are yours, and they do not change it.**
 2. **Navigation discipline:** search → `read_symbol` or narrow `read_file` ranges → whole file
    only when needed. Use the repo map.
 3. **The ledger:** stubs mean the content is already in context. Use `refresh` only if needed.
@@ -216,8 +231,12 @@ less:
 11. The list of available capability packs, one line each.
 
 Project instructions (`AGENTS.md`, `KAI.md`, `GEMINI.md` if present) follow the system prompt
-in the seed. Nested instruction files are loaded **just-in-time** when a tool first touches their
-subtree, and are delivered as a `kai_notice` (Gemini CLI's JIT idea).
+in the seed: the root files, plus every nested file whose scope covers the task's known paths
+([context-compiler.md](context-compiler.md#project-instructions-instruction-map-and-pre-mutation-gate)).
+Other nested files are delivered as a `kai_notice` when a read or search first touches their
+subtree. This is only an optimization. The **guarantee** comes from the Patch Engine's
+**instruction gate**: no mutation of a path proceeds until every instruction file that applies to
+that path has been delivered in the current epoch at its current hash.
 
 ## Acceptance tests
 
@@ -226,3 +245,7 @@ subtree, and are delivered as a `kai_notice` (Gemini CLI's JIT idea).
   output.
 - Parallel-call ordering: two reads and two replaces in one response give one transaction, with
   results returned in the model's order.
+- `update_plan` rejects `objective` and `acceptance_criteria` fields. `proposed_criteria`
+  appear only in the model-authored section of the brief.
+- An edit under `services/payments/` with an undelivered `services/payments/AGENTS.md` returns
+  `NOT APPLIED` with the instruction text. The identical resend is applied.

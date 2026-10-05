@@ -29,7 +29,7 @@ interface LedgerEntry {
   contentHash: ContentHash;     // hash of the full file at read time
   range: LineRange | "outline"; // inclusive 1-based lines, or an outline delivery
   symbol?: string;              // when served via read_symbol
-  delivery: "full" | "range" | "outline" | "stub" | "diff" | "edit_echo";
+  delivery: "full" | "range" | "outline" | "stub" | "diff" | "edit_echo" | "instructions";
   estTokens: number;
   seq: number;
 }
@@ -51,7 +51,11 @@ Sources of ledger entries:
 - `edit_echo`: the hunk the Patch Engine returns after an applied edit. The model saw the new
   text, so the ledger records it at the new hash,
 - excerpts in an epoch seed (`relevant_code`), recorded with the seed's turn,
-- `read_artifact` ranges, keyed by artifact ID instead of path.
+- `read_artifact` ranges, keyed by artifact ID instead of path,
+- `instructions`: a project instruction file delivered in the seed, as a read-time notice, or in
+  an instruction-gate refusal. Recorded with its hash. The Patch Engine's
+  [instruction gate](patch-engine.md#instruction-gate) asks `instructionsDelivered` before every
+  mutation.
 
 ## Operations
 
@@ -67,6 +71,8 @@ interface ReadLedger {
   onFileChanged(path: string, newHash: ContentHash, cause: "kai_write" | "external" | "formatter"): StaleRegion[];
   /** For briefs: files read in a task, with symbol cards and staleness. */
   filesRead(taskId: TaskId): FileReadSummary[];
+  /** Instruction gate: was this instruction file delivered in this epoch at this hash? */
+  instructionsDelivered(path: string, hash: ContentHash, epochId: EpochId): boolean;
 }
 
 type LedgerCheck =

@@ -21,7 +21,9 @@ interface TurnRecord {
   usage: TurnUsage;                    // REPORTED: input, cached, thought, output, toolUse, total
   latency: { ttftMs?: number; totalMs: number };
   status: TurnStatus;
-  manifest: ContextManifest;           // ESTIMATED per category; plus unattributed vs reported
+  manifest: ContextManifest;           // COMPLETE accounting: delta + composition per category, each labelled
+                                       // reported|estimated, incl. model-generated history; residual vs reported
+  preflight: { projected: number; action: string };   // ESTIMATED projection that gated this request
   toolCalls: { name: string; ok: boolean; resultEstTokens: number }[];
   counters: TurnCounters;
   costUsd: { value: number; priceTableVersion: string };   // derived from usage
@@ -47,18 +49,23 @@ interface TurnCounters {
   integrityFindings: number;
   // context mgmt
   epochStarted: boolean; contextMgmtTokens: number;       // REPORTED usage of digest/critic calls attributed to context mgmt
+  preflightReshapes: number; preflightRollovers: number;
+  instructionDeliveries: number; instructionGateRejections: number;
 }
 
 interface TaskSummary {
   taskId: TaskId; finalState: TaskState;
   turns: number; epochs: number;
   usageTotals: TurnUsage; costUsd: number;
-  estTokensSaved: { ledger: number; spooling: number; toolExposure: number };   // ESTIMATED
+  estTokensSaved: { ledger: number; spooling: number; toolExposureGross: number };   // ESTIMATED
+  accounting: { healthy: boolean; meanAbsResidualPct: number; identityViolations: number }; // gates the line above
   correctness: {
     firstTxnCleanRate: number;          // share of transactions with 0 introduced errors
     inventedSymbolRate: number;         // hallucination-class findings per 100 changed lines
     firewallRejects: number; prematureCompletions: number;
-    integrityIncidents: number; criticBlocking: number;
+    integrityIncidents: number; integrityUnresolved: number; criticBlocking: number;
+    introducedIntermittent: number;     // intermittent failures classified as introduced
+    recoveries: { rolledForward: number; rolledBack: number; aborted: number; conflicts: number };
   };
   wallClockMs: number;
 }
@@ -87,8 +94,17 @@ interface TaskSummary {
 
 ## Accuracy guards
 
-- `unattributed / reported` per turn is tracked. A rolling mean above 10% raises a warning in
-  `kai doctor`, since the estimator needs calibration.
+- **Complete request accounting** ([context-compiler](context-compiler.md#complete-request-accounting)):
+  every request's manifest attributes all of `reportedInputTokens` to categories, including
+  model-generated history (`history_model_text`, `history_function_calls`, `history_thoughts`),
+  which is sized from **reported** output and thought tokens, never from character ratios. The
+  per-request `residual = reported − Σ composition` is stored.
+- **Savings are gated on accounting health.** Estimated savings are displayed and exported as
+  **calibrated** only when, over the trailing 20 requests, mean `|residual| / reportedInput ≤ 5%`
+  and there were no accounting-identity violations. Otherwise every estimated-savings figure is
+  labelled `uncalibrated` in the CLI, `kai stats` and exports, and the benchmark excludes it from
+  headline numbers. Reported usage is always shown, because it is exact.
+- `kai doctor` reports accounting health, identity violations, and the estimator's ingress error.
 - Cost uses a **versioned price table** stored in the repository
   (`packages/core/src/telemetry/prices.ts`) with the source URL and the date checked. Reports
   show the table version.
@@ -98,5 +114,9 @@ interface TaskSummary {
 1. A fake provider with fixed usage gives exact reported totals, and the cost matches the table.
 2. A ledger stub increments `readsStubbed`, and the estimated saving equals the estimated tokens
    of the range.
-3. Spooling a 1 MB output records the produced and injected bytes, and the ratio is computed.
-4. `kai stats` output is stable (snapshot) for a recorded session fixture.
+3. With a fake provider that violates the accounting identity, `kai stats` shows savings as
+   `uncalibrated`, and the benchmark export omits them from the headline table.
+4. A turn whose response contained a 20k-character `replace` argument attributes the next
+   request's growth to `history_function_calls` (reported), not to ingress categories.
+5. Spooling a 1 MB output records the produced and injected bytes, and the ratio is computed.
+6. `kai stats` output is stable (snapshot) for a recorded session fixture.

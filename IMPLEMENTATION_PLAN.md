@@ -45,11 +45,16 @@ work. These are relative sizes for planning order, not commitments.
 
 **Build** (in this order)
 1. **Session Store** ([event-model](docs/specs/event-model.md)): SQLite (WAL), `events`, blobs,
-   the projections `tasks`, `turn_usage`, `artifacts` (minimal), the rebuild command, and the
-   recovery of dangling tool calls.
+   the projections `tasks`, `task_contracts`, `inflight_transactions`, `turn_usage`,
+   `artifacts` (minimal), the rebuild command, the `synchronous=FULL` journal-commit path, and
+   startup recovery (journal first, then dangling tool calls).
 2. **KSP** ([protocol](docs/specs/protocol.md)): Zod schemas, in-memory and stdio transports,
-   `initialize`, `workspace.open`, `session.*`, `task.submit/cancel/report`, and `subscribe`
-   with snapshot + `seq`.
+   `initialize`, `workspace.open`, `session.*`, `task.submit/steer/amend/cancel/report`,
+   `recovery.resolve`, and `subscribe` with snapshot + `seq`. The **`UserActionToken`** is
+   mintable only in user-action handlers.
+   - **Task Contract** ([task-contract](docs/specs/task-contract.md)): recorded verbatim at
+     `task.submit`, amended only by user actions, rendered in the seed. This comes before any
+     tool that could otherwise let the model state requirements.
 3. **Gemini Provider** ([gemini-provider](docs/specs/gemini-provider.md)): Interactions
    streaming, **chained and stateless** modes, usage capture, raw response blobs, retries,
    thinking-level clamping, capability probing (`models.get` + level probe), the fixture
@@ -57,9 +62,12 @@ work. These are relative sizes for planning order, not commitments.
 4. **Turn Loop** (ARCHITECTURE §5) with a fixed `thinking_level` (config) and no epochs yet: a
    single chain per task.
 5. **Core tools v0**: `read_file` (ranges, numbered lines, no ledger yet), `grep_search`
-   (ripgrep), `glob`, `replace` (exact match only, unique, atomic temp+rename, no firewall
-   yet), `write_file`, `run_shell_command` (process group, timeout, naive head+tail truncation,
-   a deny-list policy for the obvious classes), `update_plan` (stores working state), and
+   (ripgrep), `glob`, `replace` (exact match only, unique, no firewall yet) and `write_file`,
+   **both through the write-ahead journal** (PREPARE → STAGE → VERIFY → SWAP → COMMIT, plus
+   startup recovery; [patch-engine](docs/specs/patch-engine.md#commit-protocol-write-ahead-journal)),
+   because invariant J1 holds from the first write. Also `run_shell_command` (process group,
+   timeout, naive head+tail truncation, a deny-list policy for the obvious classes),
+   `update_plan` (model-authored working state; **no** objective or acceptance fields), and
    `complete_task` (sets `implemented_unverified`; no gate yet).
 6. **CLI**: `kai run "<prompt>"` (interactive streaming), `kai run --headless --json`
    (stdio), the per-turn telemetry line (reported usage only), and `kai doctor` (key present,
@@ -75,6 +83,10 @@ work. These are relative sizes for planning order, not commitments.
 - Contract tests pass against the live API. G1/G3/G4 measurements are written to
   `docs/evaluation/reports/contract-<date>.md`.
 - `kai db rebuild` gives identical projections.
+- Journal crash cases K2–K6 from the patch-engine matrix pass for single- and multi-file
+  `write_file` transactions.
+- No code path from the Turn Loop or tools can amend the Task Contract (task-contract
+  acceptance test 1).
 
 ---
 
@@ -106,17 +118,29 @@ work. These are relative sizes for planning order, not commitments.
    and counters.
 3. **Context Compiler** ([context-compiler](docs/specs/context-compiler.md)): seed layout and
    budget allocation (repo map placeholder: directory tree until Phase 5), ingress admission,
-   the manifest and estimator calibration, **epochs** (all rules), the **deterministic epoch
-   brief**, `<last_results>`, the `update_plan` integration, project instructions plus JIT
-   nested instructions, and stateless batched elision.
-4. Telemetry v1 ([telemetry](docs/specs/telemetry.md)): full `TurnRecord` and counters, `kai
-   stats`, the price table.
+   **request preflight** (batch cap, projection with carried output, reshape, rollover;
+   never above the hard limit), **complete request accounting** (all categories including
+   model-generated history, the accounting identity, calibration on measured ingress only),
+   **epochs** (all rules), the **deterministic epoch brief** with the verbatim contract,
+   `<last_results>` / `carriedResults`, the `update_plan` integration, and stateless batched
+   elision.
+4. **Instruction map and gate**: instruction-file discovery at workspace open, seed inclusion
+   for known paths, read-time delivery, and the **pre-mutation instruction gate** in the
+   `replace`/`write_file` path and for mutating shell commands
+   ([patch-engine](docs/specs/patch-engine.md#instruction-gate)).
+5. Telemetry v1 ([telemetry](docs/specs/telemetry.md)): full `TurnRecord` and counters, `kai
+   stats`, the price table, and savings **gated on accounting health**.
 
 **Acceptance**
-- Unit and acceptance tests from the three specs pass.
-- Benchmark (v0-alpha): **lower median tokens per resolved task than the Phase 1 skeleton and
-  A0, at non-inferior resolve rate**. The duplicate-read rate is about 0, the spooling ratio is
-  reported, and the estimator's unattributed share is under 10%.
+- Unit and acceptance tests from the specs above pass (including context-compiler tests 6–10).
+- Over the whole benchmark run, **no request exceeds `epochHardLimit`** (asserted from
+  `PreflightDecision` and `ModelRequest` events).
+- Accounting is healthy (mean `|residual|/reported ≤ 5%` over trailing 20 requests) on the
+  benchmark sessions. Otherwise savings are reported as uncalibrated, and the phase is not done.
+- Benchmark (v0-alpha, plus `nested_instructions` and `large_batch` tasks): **lower median
+  tokens per resolved task than the Phase 1 skeleton and A0, at non-inferior resolve rate**. The
+  duplicate-read rate is about 0, the spooling ratio is reported, and there are **zero
+  instruction violations caused by edits made before their instructions were delivered**.
 
 ---
 
@@ -124,8 +148,10 @@ work. These are relative sizes for planning order, not commitments.
 
 **Build**
 1. **Patch Engine** ([patch-engine](docs/specs/patch-engine.md)): overlay transactions per model
-   response, the matching ladder with candidates, ledger version checks, atomic multi-file
-   commit with rollback, reverse patches, and result formats.
+   response, the matching ladder with candidates, ledger version checks, the journaled commit
+   for multi-edit transactions (extending Phase 1), `RecoveryConflict` handling with
+   `recovery.resolve`, the user rollback API as a journaled transaction, reverse patches, and
+   result formats.
 2. **Workspace safety** ([ADR-0013](docs/adr/0013-workspace-safety-and-checkpoints.md)): git-ref
    checkpoints with a private index, restore, the command policy on parsed argv, env
    sanitization, and `--worktree` mode.
@@ -133,17 +159,23 @@ work. These are relative sizes for planning order, not commitments.
    `web-tree-sitter` with TS, JS and Python grammars from the index work), F2 (placeholders), F7
    (scope), F9 (secrets).
 4. **Verification Engine** ([verification-engine](docs/specs/verification-engine.md)): profile
-   discovery and persistence, tiers T2–T4, the gate, the state machine, lazy baselines, flaky
-   classification, the evidence bundle, and background T2 notices.
+   discovery and persistence, tiers T2–T4, the gate, the state machine (including `blocked`
+   reasons), **baseline classification with established-only flakiness** (now-reruns, baseline
+   runs, baseline-only flake history, user-owned `knownFlaky`, `introduced_intermittent`), the
+   evidence bundle against the contract, and background T2 notices.
 5. **Test Integrity Guard** ([test-integrity-guard](docs/specs/test-integrity-guard.md)):
-   detectors I1–I14 (TS and Python), `justify_test_change`, and the gate integration.
-   (Escalation to the critic arrives in Phase 6. Until then, high-severity cases need user
-   approval.)
+   detectors I1–I14 (TS and Python), `justify_test_change` with **contract citations** and the
+   deterministic citation check, the resolution matrix, and the gate integration. Until the
+   critic's `integrity_review` arrives in Phase 6, every high-severity finding needs **user
+   approval**. Headless runs end `blocked` (`integrity_review_required`).
 
 **Acceptance**
-- All acceptance tests in the specs above pass, including fault injection for commit rollback.
-- Benchmark adds `test_temptation` and `no_tests_repo` tasks: **zero unjustified manipulation
-  incidents** in Kai's final diffs. The premature-completion rate is lower than A0's.
+- All acceptance tests in the specs above pass, including the **full crash-injection matrix
+  K1–K8** and the introduced-race fixture (verification test 4).
+- Benchmark adds `test_temptation`, `requirement_drift`, `intermittent_bug` and
+  `no_tests_repo` tasks: **zero unresolved test-weakening changes in final diffs that Kai marked
+  `verified`**, and **zero `verified` tasks with an introduced intermittent failure**. The
+  premature-completion rate is lower than A0's.
 
 ---
 
@@ -182,14 +214,17 @@ work. These are relative sizes for planning order, not commitments.
 2. **Repair/Replan Controller** ([repair-replan-controller](docs/specs/repair-replan-controller.md)),
    with fingerprints, rules D1–D8, budgets, the replan brief, and a read-only first replan turn.
 3. Provider **degenerate-output guard** wiring into D7.
-4. **Critic** ([critic](docs/specs/critic.md)), with triggers, the evidence bundle,
-   `submit_review`, evidence validation, budgets, and incremental re-review. Integrity
-   escalations route here.
+4. **Critic** ([critic](docs/specs/critic.md)), with **two modes and separate budgets**:
+   optional `risk_review` (triggers, evidence bundle, `submit_review`, evidence validation,
+   incremental re-review; skippable on exhaustion) and mandatory `integrity_review` (reserved
+   budget, `submit_integrity_verdicts`, quote validation; unavailable → unresolved → not
+   `verified`). Contract-backed high-severity integrity findings route to `integrity_review`.
 5. **Capability pack activation** at epoch boundaries ([ADR-0012](docs/adr/0012-tool-surface-and-dynamic-exposure.md)),
    plus `allowed_tools` phase restrictions.
 
 **Acceptance**
-- Spec acceptance tests pass, including scripted stuck scenarios with the fake provider.
+- Spec acceptance tests pass, including scripted stuck scenarios with the fake provider, and
+  critic tests 4–7 (risk budget exhaustion never removes a mandatory integrity review).
 - Benchmark adds `repair_loop_bait` and `long_horizon`: **thought tokens per resolved task drop
   versus `--governor=fixed:high`** at non-inferior resolve rate. Replan success rate is
   reported.
@@ -203,8 +238,9 @@ work. These are relative sizes for planning order, not commitments.
   and calibration sweeps.
 - Choose defaults per the benchmark. Remove or disable any mechanism that fails
   [ADR-0014](docs/adr/0014-measurement-gated-mechanisms.md).
-- Crash and recovery test suite, `kai gc`, retention, `kai doctor` checks (estimator
-  calibration, LSP health, profile sanity), and user docs.
+- Crash and recovery test suite (including the nightly block-level crash-simulation harness),
+  `kai gc`, retention, `kai doctor` checks (accounting health and identity violations, LSP
+  health, profile sanity, G10 probe), and user docs.
 
 **Acceptance (v1 release criteria)**
 - On the held-out set versus A0: **≥ 25% lower median cost per resolved task**, **resolve rate

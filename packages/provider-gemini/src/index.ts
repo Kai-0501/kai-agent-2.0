@@ -38,7 +38,7 @@ export interface GeminiOptions {
   readonly labels?: Readonly<Record<string, string>>; // kai_session, kai_epoch, kai_turn
 }
 
-/** Capabilities established by probing (docs/research/gemini-api.md#open-questions G1–G9). */
+/** Capabilities established by probing (docs/research/gemini-api.md#open-questions G1–G10; G2/G10 flags live in ModelCapabilities). */
 export interface GeminiModelCapabilities extends ModelCapabilities {
   readonly provider: "gemini";
   readonly thinkingLevels: readonly GeminiThinkingLevel[]; // G4

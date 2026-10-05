@@ -8,6 +8,7 @@
  * Map of modules to specs:
  *   provider.ts   → docs/adr/0011, docs/specs/gemini-provider.md
  *   events.ts     → docs/specs/event-model.md
+ *   contract.ts   → docs/specs/task-contract.md
  *   context.ts    → docs/specs/context-compiler.md
  *   ledger.ts     → docs/specs/read-ledger.md
  *   artifacts.ts  → docs/specs/artifact-store.md
@@ -25,6 +26,7 @@
  */
 export type * from "./provider.js";
 export type * from "./events.js";
+export type * from "./contract.js";
 export type * from "./context.js";
 export type * from "./ledger.js";
 export type * from "./artifacts.js";
