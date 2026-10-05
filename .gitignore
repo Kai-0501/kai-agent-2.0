@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+# Kai runtime data never lives in the repo, but guard against accidents:
+.kai/cache/
+.kai/sessions/
