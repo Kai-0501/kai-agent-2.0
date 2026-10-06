@@ -273,8 +273,7 @@ loop abort ([failure modes](../failure-modes.md)).
 
 ## Open questions
 
-These must be resolved with **contract tests against the live API** in Phase 1
-([implementation plan](../../IMPLEMENTATION_PLAN.md)). The Gemini provider exposes each one as a
+These must be resolved with **contract tests against the live API**. The Gemini provider exposes each one as a
 capability flag so the rest of Kai does not depend on the answer.
 
 | # | Question | Why it matters | Default until known |

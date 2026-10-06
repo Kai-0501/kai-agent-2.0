@@ -4,11 +4,10 @@
 never trusts its claim that the code is correct, and gets cheaper on comparable projects without
 getting worse.**
 
-> ### Status: architecture and design only
-> **Production implementation has not begun.** This repository contains a researched
-> architecture, decision records, subsystem specifications, a failure-mode analysis, an
-> evaluation plan and a **types-only scaffold**. The implementation is planned in
-> [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). The R1 release scope (below) was added by
+> ### About this repository
+> This repository publishes Kai Agent's design: a researched architecture, decision records,
+> subsystem specifications, a failure-mode analysis, an evaluation plan and a **types-only
+> scaffold** of the core interfaces. The R1 release scope (below) was added by
 > [ADR-0017](docs/adr/0017-release-scope-macos-multi-provider.md).
 
 ## Why
@@ -84,7 +83,6 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) for the full design and runtime flow.
 | Path | Contents |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | End-to-end architecture, components, flows, principles |
-| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Phased roadmap with acceptance criteria, vertical slices and release gates |
 | [AGENTS.md](AGENTS.md) | Rules and workflow for coding agents implementing Kai |
 | [docs/research/](docs/research/) | Primary-source studies: Gemini API, 12 open-source projects, a comparison matrix, a synthesis, and the [release extension research](docs/research/extension-2026-10.md) |
 | [docs/adr/](docs/adr/) | 24 architecture decision records (including design-review amendments) |

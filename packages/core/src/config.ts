@@ -3,7 +3,7 @@
  *
  * Config schema v2 (docs/specs/configuration.md). Every threshold in the specs is a config key
  * here, and every mechanism has an ablation switch (docs/adr/0014-measurement-gated-mechanisms.md).
- * Defaults are starting points to be calibrated by the benchmark. Phase 0 turns this into a Zod
+ * Defaults are starting points to be calibrated by the benchmark. The implementation turns this into a Zod
  * schema with layered loading (defaults → user → workspace [restrict-only for safety keys] →
  * session → flags) and the v1 → v2 migration below.
  *

@@ -46,8 +46,7 @@ than kept because it sounds right.
 
 ## Consequences
 
-- The benchmark harness is built early (Phase 2 in the
-  [implementation plan](../../IMPLEMENTATION_PLAN.md)), not at the end.
+- The benchmark harness is built early, before the mechanisms it measures, not at the end.
 - Feature flags must be wired through config, the protocol and telemetry from the start.
 
 ## Unresolved questions

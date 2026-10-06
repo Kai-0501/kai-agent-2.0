@@ -2,7 +2,7 @@
  * SCAFFOLD: types only. Not an implementation.
  *
  * @kai/provider-gemini: native Gemini Interactions API adapter via the first-party @google/genai SDK
- * (to be added as a pinned dependency in Phase 1). No OpenAI-compatible shim. Serves the
+ * (a pinned dependency of the implementation). No OpenAI-compatible shim. Serves the
  * `gemini.api_key` route; model-facing behaviour is the `gemini` harness profile.
  * Spec: docs/specs/gemini-provider.md · Decisions: docs/adr/0003, docs/adr/0018 · Research: docs/research/gemini-api.md
  *

@@ -4,8 +4,7 @@
 - Date: 2026-10-05
 - Related: [research/extension-2026-10.md](../research/extension-2026-10.md), [ADR-0002](0002-runtime-client-boundary.md), [ADR-0011](0011-provider-extensibility-boundary.md), [ADR-0012](0012-tool-surface-and-dynamic-exposure.md), ADRs [0018](0018-providers-routes-profiles-capabilities.md)–[0016](0016-robustness-amendments.md)
 - Supersedes: the release non-goals in README.md and ARCHITECTURE.md §11 ("desktop/web UI",
-  "providers other than Gemini", "autonomous browsing"), and the matching rows of
-  IMPLEMENTATION_PLAN.md §Postponed
+  "providers other than Gemini", "autonomous browsing")
 
 ## Context / problem
 
@@ -69,7 +68,7 @@ Plugins would have been cheaper to start and much harder to keep honest.
 
 ## Consequences
 
-- README, ARCHITECTURE, IMPLEMENTATION_PLAN and AGENTS are rewritten around the release scope.
+- README, ARCHITECTURE and AGENTS are rewritten around the release scope.
 - New invariants: credentials never cross KSP; learned advice never outranks user, repository or
   verification constraints; web content never becomes instructions or global policy
   ([AGENTS.md](../../AGENTS.md)).

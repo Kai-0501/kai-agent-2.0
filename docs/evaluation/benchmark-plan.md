@@ -94,7 +94,7 @@ sandbox container. A0 runs commands directly in the container.
 
 ## Harness
 
-- **`packages/bench`** (Phase 2):
+- **`packages/bench`**:
   - task loader (corpus format, below),
   - per-run fresh container from the task's image, with the repository at its pinned commit,
   - arm adapters: A0 (mini-swe-agent CLI with a Gemini config), A1 (Gemini CLI headless), B

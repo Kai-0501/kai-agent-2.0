@@ -305,8 +305,8 @@ deliberation notices. Ablations: `--profile=<id>` (override for benchmark),
 1. Each profile's rendered prompt contains the 12 contract items and fits its budget.
 2. Alias round trip: a rendered alias resolves to the registry tool; validation and permission
    checks run identically for all profiles (same fixture call, same outcome).
-3. Gemini parity: the `gemini` profile reproduces the founding seed bytes for the Phase 3
-   fixtures.
+3. Gemini parity: the `gemini` profile reproduces the founding seed bytes for the context
+   compiler fixtures.
 4. Context sizing table rows are produced exactly by the formula (table-driven test).
 5. Effort mapping: a model with levels `[low, medium, high, xhigh]` maps `minimal → low`;
    a model with no control records `uncontrolled` and the deliberation notice appears on R4.

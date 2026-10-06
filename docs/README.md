@@ -3,7 +3,7 @@
 | Section | Start here |
 |---|---|
 | Overview | [../README.md](../README.md) · [../ARCHITECTURE.md](../ARCHITECTURE.md) |
-| Plan | [../IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) · [../AGENTS.md](../AGENTS.md) |
+| Agents | [../AGENTS.md](../AGENTS.md) |
 | Research | [research/README.md](research/README.md): Gemini API, 12 upstream projects, [comparison matrix](research/comparison-matrix.md), [synthesis](research/synthesis.md), [release extension research](research/extension-2026-10.md) |
 | Decisions | [adr/README.md](adr/README.md): 24 ADRs |
 | Specifications | [specs/README.md](specs/README.md): 27 subsystem specs |

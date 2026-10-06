@@ -46,7 +46,7 @@ process separation the KSP boundary assumes.
 
 ## Consequences
 
-- Before Phase 11, verify: Electron's bundled Node version meets ADR-0001 (Node 24 LTS line);
+- Before building the shell, verify: Electron's bundled Node version meets ADR-0001 (Node 24 LTS line);
   `better-sqlite3` and the keychain binding build for its ABI; required hardened-runtime
   entitlements.
 - The runtime must shut down cleanly on app quit and recover on restart

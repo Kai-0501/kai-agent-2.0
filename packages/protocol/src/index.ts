@@ -8,7 +8,7 @@
  * Credential-free rule: no response, notification or event type in this file carries secret
  * material. The only secret-bearing field is the inbound `credentials.put` params.secret.
  *
- * Phase 1 replaces these hand-written types with Zod schemas (types inferred from them), so
+ * The implementation replaces these hand-written types with Zod schemas (types inferred from them), so
  * runtime and clients validate every message.
  */
 

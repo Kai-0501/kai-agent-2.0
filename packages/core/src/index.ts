@@ -5,7 +5,7 @@
  * declared here. Implementations of code intelligence (@kai/code-intel), provider adapters
  * (@kai/provider-gemini, @kai/provider-openai, @kai/provider-compatible), harness profiles
  * (@kai/profiles, planned) and the research browser (@kai/research-chrome) are wired in by the
- * composition root (@kai/runtime, Phase 0+). Core never imports them (AGENTS.md invariant 6).
+ * composition root (@kai/runtime). Core never imports them (AGENTS.md invariant 6).
  *
  * Map of modules to specs:
  *   provider.ts   → docs/adr/0011, docs/adr/0018, docs/specs/gemini-provider.md, openai-responses-provider.md, compatible-endpoints.md

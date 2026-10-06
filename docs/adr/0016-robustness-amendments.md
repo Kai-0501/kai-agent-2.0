@@ -87,12 +87,11 @@ mechanisms. Token cost does not increase measurably:
   in the low milliseconds on SSDs). This is measured.
 - **Gate verification time:** reruns plus baseline runs of failing tests. These are bounded by
   `verify.rerunsNow` and `verify.baselineRuns`, and only run on failure.
-- **Implementation order:** preflight and accounting belong in Phase 3 together with the
-  compiler. The instruction map and its gate also belong in Phase 3, since the gate guards the
-  edit path that exists from Phase 1. The journal and startup recovery start in Phase 1
-  (invariant J1 holds from the first write). Phase 4 extends them to overlay multi-edit
-  transactions, adds `RecoveryConflict` resolution, and runs the full crash matrix. Critic
-  modes belong in Phase 6 ([IMPLEMENTATION_PLAN](../../IMPLEMENTATION_PLAN.md)).
+- **Implementation order:** preflight, accounting, the instruction map and its gate are built
+  with the context compiler, since the gate guards the edit path. The journal and startup
+  recovery exist from the first write (invariant J1). The verification work extends them to
+  overlay multi-edit transactions, adds `RecoveryConflict` resolution, and runs the full crash
+  matrix. Critic modes come with the control loops.
 
 ## Unresolved questions
 
