@@ -120,8 +120,10 @@ Windows and Linux desktop builds, and a broad UI redesign.
 
 ## License and distribution
 
-To be decided by the repository owner. Upstream projects studied here are used as architectural
-inspiration only ([licensing summary](docs/research/README.md#licensing-summary)). The ChatGPT
-subscription route is documented for open-source projects, personal projects that run locally,
-and approved apps; Kai currently assumes **personal local use** only and does not change its
-licence or distribution on the owner's behalf ([ADR-0019](docs/adr/0019-sign-in-with-chatgpt-route.md)).
+Kai Agent is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE).
+Third-party projects, dependencies and quoted excerpts keep their own licenses and are credited
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Upstream projects studied here are used as
+architectural inspiration only ([licensing summary](docs/research/README.md#licensing-summary)).
+The ChatGPT subscription route's eligibility still depends on the build-time
+`release.distribution` setting, which remains the owner's decision
+([ADR-0019](docs/adr/0019-sign-in-with-chatgpt-route.md)).

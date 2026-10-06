@@ -2,6 +2,7 @@
   "name": "@kai/core",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "SCAFFOLD (types only): see docs/specs. Not an implementation.",
   "type": "module",
   "exports": {

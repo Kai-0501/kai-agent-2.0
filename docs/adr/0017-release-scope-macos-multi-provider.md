@@ -80,6 +80,7 @@ Plugins would have been cheaper to start and much harder to keep honest.
 
 ## Unresolved questions
 
-1. Licence and distribution model. The owner decides; the subscription route's eligibility
-   depends on it ([ADR-0019](0019-sign-in-with-chatgpt-route.md)).
+1. Distribution model. The licence is decided: Apache-2.0 (owner, 2026-10-06; see
+   [LICENSE](../../LICENSE)). The subscription route's eligibility still depends on
+   `release.distribution` ([ADR-0019](0019-sign-in-with-chatgpt-route.md)).
 2. Whether a later release adds Linux or Windows desktop builds.
