@@ -2,6 +2,7 @@
   "name": "kai-agent",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "Kai Agent: Gemini-first coding-agent harness. Architecture + types-only scaffold; production implementation not started.",
   "type": "module",
   "packageManager": "pnpm@10.28.0",
