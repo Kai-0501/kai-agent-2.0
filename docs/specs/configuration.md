@@ -187,4 +187,4 @@ All IDs are app-owned and never reused ([event model](event-model.md#identifiers
    message; `research.mode: "off"` is applied.
 4. Downgrade: a store with `min_writer` above the runtime's version opens read-only; appends
    are refused with a typed error; reports still render.
-5. Every `ModelRequest` in the Phase 1 and Phase 7 fixtures contains all reproducibility pins.
+5. Every `ModelRequest` in the Gemini, OpenAI and compatible-route fixtures contains all reproducibility pins.

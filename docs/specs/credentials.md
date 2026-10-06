@@ -90,7 +90,7 @@ interface RequestAuth { headers: Readonly<Record<string, string>>; origin: strin
 - Generic password items, service `dev.kai.agent`, account = `CredentialRef`, data = UTF-8 JSON
   (`{v, kind, secret | tokens}`), accessibility `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`.
 - Accessed from the **runtime process** through a maintained N-API keychain binding (candidate
-  to evaluate in Phase 8: `@napi-rs/keyring`; licence and maintenance checked before adoption).
+  to evaluate: `@napi-rs/keyring`; licence and maintenance checked before adoption).
   Not through the `security` CLI, which would expose secrets in argv.
 - Signed app builds use a stable code signature so the Keychain does not prompt on every update;
   unsigned development builds may prompt once per item.

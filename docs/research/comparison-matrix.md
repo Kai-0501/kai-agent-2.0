@@ -59,7 +59,7 @@ A compact side-by-side view of the studied harnesses. Details and permalinks are
 | Concept | Source | Kai | Where |
 |---|---|---|---|
 | Workspace-owning runtime + typed protocol + sequence cursors | T3 Code | ✅ | [ADR-0002](../adr/0002-runtime-client-boundary.md) |
-| Multi-surface clients in v1 | T3 Code | ❌ (postponed) | [IMPLEMENTATION_PLAN](../../IMPLEMENTATION_PLAN.md) |
+| Multi-surface clients in v1 | T3 Code | ❌ (postponed) | [ARCHITECTURE §16](../../ARCHITECTURE.md#16-deliberately-not-in-r1) |
 | Small explicit loop; steering queue | Pi | ✅ | [ARCHITECTURE](../../ARCHITECTURE.md) |
 | Prompt and tool loadout versioned as events | Pi | ✅ | [event model](../specs/event-model.md) |
 | Append-only log; context = projection; tombstone markers | OpenHands | ✅ | [ADR-0004](../adr/0004-durable-event-session-model.md) |

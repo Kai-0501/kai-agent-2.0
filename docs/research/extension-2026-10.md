@@ -206,8 +206,8 @@ No external source was required. The decision in [ADR-0024](../adr/0024-macos-de
 rests on the repository's own constraints: a Node/TypeScript runtime ([ADR-0001](../adr/0001-implementation-language-runtime.md)),
 native SQLite bindings, a KSP boundary ([ADR-0002](../adr/0002-runtime-client-boundary.md)),
 and no Rust or Swift code today. Electron's bundled Node version, its hardened-runtime
-entitlements and its `utilityProcess` behaviour are listed as items to verify when Phase 11
-starts.
+entitlements and its `utilityProcess` behaviour are listed as items to verify before the
+desktop shell is built.
 
 ## Open questions
 

@@ -174,7 +174,7 @@ route set to `ready`. The `earliest_refresh_at` value, if present, is respected.
 
 - Button label **"Continue with ChatGPT"** in the provider setup screen, placed with the other
   route options (API key, compatible endpoint). Logo assets from the official quickstart page
-  only, at the documented sizes (retrieved in Phase 11).
+  only, at the documented sizes (retrieved when the sign-in UI is built).
 - The route card shows: account label (masked email), workspace label if known, "Plan usage:
   ready / permission missing / limit reached", last refresh, and **Sign out**.
 - The browser step is always the user's **default browser** through the main process.

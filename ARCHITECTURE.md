@@ -1,8 +1,7 @@
 # Kai Agent: Architecture
 
 > **Status:** proposed architecture (2026-10-05), extended for the R1 release scope
-> ([ADR-0017](docs/adr/0017-release-scope-macos-multi-provider.md)). Production implementation
-> has not started. Decisions are recorded in [`docs/adr/`](docs/adr/), subsystem designs in
+> ([ADR-0017](docs/adr/0017-release-scope-macos-multi-provider.md)). Decisions are recorded in [`docs/adr/`](docs/adr/), subsystem designs in
 > [`docs/specs/`](docs/specs/), and the evidence in [`docs/research/`](docs/research/).
 
 ## 1. Goals and principles
@@ -427,5 +426,4 @@ loses nothing. See [failure-modes §cross-feature](docs/failure-modes.md#cross-f
 Multi-user or remote clients, an ACP adapter, OS sandboxing of commands, MCP, Go/Rust/Java LSP,
 embeddings, multi-agent hierarchies, explicit Gemini caching, Windows and Linux desktop builds,
 auto-installing dependencies, unrestricted browser automation, model-native hosted tools as a
-dependency, and a broad UI redesign. See
-[IMPLEMENTATION_PLAN.md §Postponed](IMPLEMENTATION_PLAN.md#postponed-deliberately).
+dependency, and a broad UI redesign.

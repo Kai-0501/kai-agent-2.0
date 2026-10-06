@@ -180,7 +180,7 @@ replan, research, reflection) and by usage class: **API spend** (with price-tabl
 - Native modules (`better-sqlite3`, the Keychain binding) rebuilt for Electron's Node ABI; the
   build verifies the bundled Node major against [ADR-0001](../adr/0001-implementation-language-runtime.md).
 - Hardened runtime, Developer ID signing and notarization (owner's Apple Developer account;
-  entitlements to be confirmed against Electron's current requirements in Phase 11).
+  entitlements to be confirmed against Electron's current requirements before release).
 - `playwright-core` is bundled; **no browser binaries** are bundled.
 - The SIWC route's `release.distribution` is fixed at build time
   ([sign-in](chatgpt-sign-in.md#eligibility-gate)).

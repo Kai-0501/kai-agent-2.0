@@ -79,4 +79,4 @@ safe boundaries.
 ## Unresolved questions
 
 1. Whether a commercial or paid Kai distribution will be approved by OpenAI (owner action).
-2. Exact branding assets (logo files) from the quickstart page, to be retrieved during Phase 11.
+2. Exact branding assets (logo files) from the quickstart page, to be retrieved when the app's sign-in UI is built.

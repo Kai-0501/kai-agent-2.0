@@ -6,8 +6,7 @@ decision, the rationale, the consequences, and the questions still open.
 **Status values:** `Proposed`, meaning accepted for implementation and revisable when evidence
 from the benchmark or the live API contradicts it; `Accepted`, meaning implemented and validated;
 `Superseded by ADR-NNNN` (or *partially superseded*, when a later ADR replaces only part of
-a decision; the older ADR then links to it). All ADRs below are **Proposed**. Production
-implementation has not started.
+a decision; the older ADR then links to it). All ADRs below are **Proposed**.
 
 To change a decision, write a new ADR that supersedes or **amends** the old one. Do not silently
 edit the decision section of an existing ADR. When an ADR is amended, its status line says

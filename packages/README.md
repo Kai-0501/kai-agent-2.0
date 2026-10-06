@@ -2,8 +2,7 @@
 
 > **This is not an implementation.** Every file here starts with a `SCAFFOLD` header and contains
 > only TypeScript types and interfaces, plus one data object, `DEFAULT_CONFIG`. Nothing here runs
-> an agent. Production implementation starts in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md)
-> Phase 0.
+> an agent.
 
 The scaffold makes the architectural boundaries concrete and compiler-checked:
 

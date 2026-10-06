@@ -5,17 +5,16 @@ efficiency** and **verified correctness**. Gemini and ChatGPT/OpenAI models are 
 user-configured OpenAI-compatible endpoints run on a generic profile with the same protections.
 Hold this codebase to the standards it enforces on the models.
 
-> **Status:** architecture and type scaffold only, including the R1 release extension
-> ([ADR-0017](docs/adr/0017-release-scope-macos-multi-provider.md)). Production implementation
-> starts with [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) Phase 0. Files under
-> `packages/*/src/` that begin with a `SCAFFOLD` header are type sketches, not implementations.
+> **Status:** this repository holds the architecture, specifications and type scaffold,
+> including the R1 release extension ([ADR-0017](docs/adr/0017-release-scope-macos-multi-provider.md)).
+> Files under `packages/*/src/` that begin with a `SCAFFOLD` header are type sketches, not
+> implementations.
 
 ## Read first (in this order)
 
 1. [README.md](README.md): thesis and status
 2. [ARCHITECTURE.md](ARCHITECTURE.md): components, flows, principles P1–P8
-3. [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): the phase you are working on
-4. The spec(s) for the subsystem you are touching ([docs/specs/](docs/specs/)) and the relevant
+3. The spec(s) for the subsystem you are touching ([docs/specs/](docs/specs/)) and the relevant
    ADRs ([docs/adr/](docs/adr/)). For routes, profiles, endpoints, learning, research or the app,
    also read [docs/research/extension-2026-10.md](docs/research/extension-2026-10.md), including
    its open questions.
@@ -136,8 +135,7 @@ spec in the same PR as the code, and explain why in the PR description.
   - **acceptance tests** as listed in each spec (fixtures under `fixtures/`);
   - **contract tests** against the live Gemini API (`pnpm test:contract`, requires
     `GEMINI_API_KEY`). Run them before any `@google/genai` upgrade; the OpenAI, compatible,
-    live-auth, installed-Chrome and app suites are separate and gated
-    ([plan](IMPLEMENTATION_PLAN.md#phase-0-foundations-s)). **Never report a live suite as
+    live-auth, installed-Chrome and app suites are separate and gated. **Never report a live suite as
     passing unless it ran in its required environment;**
   - **property tests** for the event store (rebuild equality) and the patch engine (atomicity);
   - **crash-injection tests** for the transaction journal (the K1–K8 matrix in the
@@ -167,7 +165,7 @@ spec in the same PR as the code, and explain why in the PR description.
 
 ## Commands
 
-Phase 0 creates the tooling. Until then, only the scaffold typecheck exists.
+In this repository only the scaffold typecheck runs; the other commands describe the full toolchain.
 
 | Command | Purpose |
 |---|---|
@@ -176,22 +174,22 @@ Phase 0 creates the tooling. Until then, only the scaffold typecheck exists.
 | `pnpm typecheck` | `tsc -b` across packages (works on the scaffold today) |
 | `pnpm test` | Unit tests (vitest) |
 | `pnpm test:contract` | Live Gemini contract tests (needs `GEMINI_API_KEY`) |
-| `pnpm test:contract:openai` | Live OpenAI Responses contract tests (needs `OPENAI_API_KEY`; Phase 7+) |
-| `pnpm test:contract:compat` | Compatible endpoint matrix (needs the listed servers; Phase 7+) |
-| `pnpm test:live-auth` | Sign in with ChatGPT live suite (macOS, eligible account, browser; Phase 8+) |
-| `pnpm test:smoke:chrome` | Installed-Chrome research smoke suite (macOS with Google Chrome; Phase 9+) |
-| `pnpm test:smoke:app` | macOS app smoke suite (Phase 11+) |
-| `pnpm bench -- --arms A0,B --tasks v0-alpha --runs 3` | Benchmark (Phase 2+) |
-| `pnpm kai -- run "<prompt>"` | Run the CLI from source (Phase 1+) |
+| `pnpm test:contract:openai` | Live OpenAI Responses contract tests (needs `OPENAI_API_KEY`) |
+| `pnpm test:contract:compat` | Compatible endpoint matrix (needs the listed servers) |
+| `pnpm test:live-auth` | Sign in with ChatGPT live suite (macOS, eligible account, browser) |
+| `pnpm test:smoke:chrome` | Installed-Chrome research smoke suite (macOS with Google Chrome) |
+| `pnpm test:smoke:app` | macOS app smoke suite |
+| `pnpm bench -- --arms A0,B --tasks v0-alpha --runs 3` | Benchmark |
+| `pnpm kai -- run "<prompt>"` | Run the CLI from source |
 
 ## Workflow
 
-1. Pick the next unchecked item in the current phase of the implementation plan.
-2. Read its spec. Write or extend the acceptance tests from the spec first where practical.
-3. Implement the smallest change that passes them, with config, an ablation flag and telemetry.
-4. Run `pnpm check`. For provider changes, also run `pnpm test:contract`.
-5. Update the spec if the shape changed. Write a superseding ADR if a decision changed.
-6. In the PR description: what changed, which acceptance criteria now pass, any benchmark
+1. Read the spec for the item you are implementing. Write or extend the acceptance tests from
+   the spec first where practical.
+2. Implement the smallest change that passes them, with config, an ablation flag and telemetry.
+3. Run `pnpm check`. For provider changes, also run `pnpm test:contract`.
+4. Update the spec if the shape changed. Write a superseding ADR if a decision changed.
+5. In the PR description: what changed, which acceptance criteria now pass, any benchmark
    impact (when available), and any spec or ADR updates.
 
 ## When you are unsure
